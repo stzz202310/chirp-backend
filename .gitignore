@@ -1,6 +1,8 @@
 *.box
+.DS_Store
+.idea
 .vagrant
-Vagrantfile
+# Vagrantfile
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
