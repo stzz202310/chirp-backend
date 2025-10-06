@@ -34,12 +34,7 @@ sudo mysql -u root << EOF
 	CREATE DATABASE IF NOT EXISTS twitter;
 EOF
 
-# 如果想直接进入/vagrant路径下
-# 请输入vagrant ssh命令进入
-# 手动输入
-# 输入ls -a
-# 输入 vi .bashrc
-# 在最下面，添加cd /vagrant
+
 echo "Python:" $(python --version)
 echo "Django:" $(python -m django --version)
 echo "mysqlclient:" $(python -c "import importlib.metadata as m; print(m.version('mysqlclient'))")
