@@ -20,7 +20,8 @@ A practice project: implementing a simplified **Twitter backend** with **Django*
 1. Start and manage the Vagrant VM
    ```bash
    vagrant up        # Start the virtual machine
-   vagrant ssh       # SSH into the VM
+   vagrant provision # Run provision.sh to set up/configure the VM
+   vagrant ssh       # SSH into the VM (ssh vagrant@127.0.0.1 -p 2222)
    vagrant halt      # Stop the VM when finished
    
 2. Navigate to the project directory:
@@ -32,6 +33,10 @@ A practice project: implementing a simplified **Twitter backend** with **Django*
    python manage.py migrate      # Apply database migrations
    python manage.py test         # Run unit tests
    python manage.py runserver 0.0.0.0:8000
-   # Start the development server, then open http://localhost:8000 in your browser
+   # Start the development server, then open http://localhost in your browser
+   
+   python manage.py createsuperuser      # Create an admin super user (for Django admin)
+   django-admin.py startproject twitter  # Create a new Django project named "twitter"
+   python manage.py startapp accounts    # Create a new app called "accounts"
 
 ---
