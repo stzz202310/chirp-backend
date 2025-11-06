@@ -3,6 +3,7 @@
 .idea
 .vagrant
 # Vagrantfile
+.pycharm_helpers/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
