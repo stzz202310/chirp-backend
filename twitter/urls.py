@@ -19,15 +19,22 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework import routers
 
-from accounts.api.views import UserViewSet
+from accounts.api.views import UserViewSet, AccountViewSet
 
+# DRF提供的一个'自动路由器', 能自动根据ViewSet生成 标准RESTful风格的URL
 router = routers.DefaultRouter()
+# router.register(URL前缀 prefix, viewSet, [base_name])
+# 告诉路由器: '我有一个视图集 UserViewSet, 请帮我生成以/api/users/开头的 URL 路由'
+# /api/users/       base_name: 'XXX-list'   list, create
+# /api/users/{pk}/  base_name: 'XXX-detail' retrieve, update/partial_update, destroy
 router.register(r'api/users', UserViewSet)
+router.register(r'api/accounts', AccountViewSet, basename='accounts')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # 把router 动生成的所有URL加入到 Django的总路由中; 这行代码等价于手动写出一堆 path (list, detail)
     path('', include(router.urls)),
-    path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     # 添加DRF提供的一个'登录/注销'界面 仅浏览器页面用到; 'api-auth/login/' 'api-auth/logout'
     # 这样当你访问 /users/ 时, 页面右上角会出现 Login按钮
+    path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
 ]
