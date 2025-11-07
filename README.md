@@ -27,6 +27,7 @@ A practice project: implementing a simplified **Twitter backend** with **Django*
 2. Navigate to the project directory:
    ```bash
    cd /vagrant
+   mysql -u root -pzhuzhu   # Log in to the MySQL database
    
 3. Run Django commands
    ```bash

@@ -15,12 +15,12 @@ class LoginSerializer(serializers.Serializer):
 
     # 用户输入的字段格式校验在 serializer 中处理
     # 但涉及到数据库查询（如 User.objects.filter(), 也可以放在 view 中处理
-    # def validate(self, data):
-    #     if not User.objects.filter(username=data.get('username').lower()).exists():
-    #         raise exceptions.ValidationError({
-    #             "username": "User does not exist.",
-    #         })
-    #     return data
+    def validate(self, data):
+        if not User.objects.filter(username=data.get('username').lower()).exists():
+            raise exceptions.ValidationError({
+                "username": "User does not exist.",
+            })
+        return data
 
 
 """

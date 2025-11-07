@@ -106,11 +106,11 @@ class AccountViewSet(viewsets.ViewSet):
 
         # queryset = User.objects.filter(username=username)
         # print(queryset.query)
-        if not User.objects.filter(username=username).exists():
-            return Response({
-                "success": False,
-                "message": "User does not exist.",
-            })
+        # if not User.objects.filter(username=username).exists():
+        #     return Response({
+        #         "success": False,
+        #         "message": "User does not exist.",
+        #     }, status=400)
 
         user = django_authenticate(username=username, password=password)
         if not user or user.is_anonymous:
