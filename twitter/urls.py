@@ -17,6 +17,7 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import include, path
+from debug_toolbar.toolbar import debug_toolbar_urls
 from rest_framework import routers
 
 from accounts.api.views import UserViewSet, AccountViewSet
@@ -37,4 +38,4 @@ urlpatterns = [
     # 添加DRF提供的一个'登录/注销'界面 仅浏览器页面用到; 'api-auth/login/' 'api-auth/logout'
     # 这样当你访问 /users/ 时, 页面右上角会出现 Login按钮
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
-]
+] + debug_toolbar_urls()
