@@ -101,7 +101,8 @@ class AccountApiTests(TestCase):
             'password': 'new tester',
             'email': 'not a correct email',
         })
-        # print(response.data)
+        # print(response.data)      解析前, 原始响应内容 (bytes) 400错误
+        # print(response.content)   解析后，Python 对象 (dict)  500错误
         self.assertEqual(response.status_code, 400)
 
         # 3 测试密码 太短
