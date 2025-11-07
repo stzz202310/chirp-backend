@@ -26,7 +26,16 @@ SECRET_KEY = 'django-insecure-8$!(l%_g+2@_zo20t60o!$a3djbwonviy)zv$zs($=y6lfw1x!
 DEBUG = True
 
 ALLOWED_HOSTS = ['127.0.0.1', '192.168.33.10', 'localhost',]
+INTERNAL_IPS = ['10.0.2.2',]
+"""
+在 Vagrant + VirtualBox NAT 网络模式中：
 
+- 虚拟机自己的 IP 通常为：10.0.2.15
+- 虚拟机看到的宿主机 IP 是：10.0.2.2
+- 端口映射把宿主机端口转发到虚拟机端口，例如：host:80 → guest:8000
+
+所以 request.META['REMOTE_ADDR'] 为 10.0.2.2 表示：请求来自“宿主机浏览器”。
+"""
 
 # Application definition
 
@@ -39,6 +48,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'rest_framework',
+    "debug_toolbar",
 ]
 
 REST_FRAMEWORK = {
@@ -46,6 +56,9 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10
 }
 
+# 所有的 HTTP 请求和响应都会按顺序依次经过这些 middleware
+# Client Request → [Middleware1] → [Middleware2] → ... → View
+# Client Response ← [Middleware1] ← [Middleware2] ← ...    ↓
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -54,6 +67,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    "debug_toolbar.middleware.DebugToolbarMiddleware",  #
 ]
 
 ROOT_URLCONF = 'twitter.urls'
