@@ -16,24 +16,13 @@ from accounts.api.serializers import (
 )
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
+    queryset = User.objects.all()       # ModelViewSet 必需
+    serializer_class = UserSerializer   # ModelViewSet 必需
     permission_classes = [permissions.IsAuthenticated]
 
 
 class AccountViewSet(viewsets.ViewSet):
     serializer_class = SignupSerializer
-    """
-    ModelViewSet：方便但暴露多，容易出现安全漏洞
-    ViewSet：需要手动实现，但更安全、更灵活，推荐在涉及用户账户或敏感数据的接口使用
-
-    | 特性          | `ModelViewSet`                               | `ViewSet`           |
-    | ------------ | -------------------------------------------- | ------------------- |
-    | 自动生成 CRUD | ✅（list, create, retrieve, update, destroy） | ❌ 需要自己手动实现方法             |
-    | 自动关联模型  | ✅ 通过 `queryset` 和 `serializer_class`       | ❌ 没有自动绑定模型，需要自己处理数据 |
-    | 灵活性       | 较低（自动暴露所有 CRUD）                        | 高（只暴露你想实现的接口）           |
-    """
-
     """
     urls.py
     router = DefaultRouter()
@@ -62,11 +51,11 @@ class AccountViewSet(viewsets.ViewSet):
     | `@action(detail=False)`                          | `/api/accounts/login_status/` | `accounts-login_status` |
     | `@action(detail=False, url_path="login-status")` | `/api/accounts/login-status/` | `accounts-login-status` |
 
+    
+    detail=True   单个对象    /api/accounts/{pk}/login_status/
+    detail=False  列表       /api/accounts/login_status/
+    request 代表“当前发起这次请求的用户”; 对作用于当前会话的动作 detail=False
     """
-    # detail=True   单个对象    /api/accounts/{pk}/login_status/
-    # detail=False  列表       /api/accounts/login_status/
-    # request 代表“当前发起这次请求的用户”; 对作用于当前会话的动作 detail=False
-
     @action(methods=['GET'], detail=False)
     def login_status(self, request):
     # @action(methods=['GET'], detail=True)
@@ -86,24 +75,14 @@ class AccountViewSet(viewsets.ViewSet):
 
     @action(methods=['POST'], detail=False)
     def login(self, request):
-        # request = {
-        #   "是谁发来的？"         → request.user
-        #   "带来了什么数据？"      → request.data
-        #   "URL 参数是什么？"     → request.query_params
-        #   "是否登录？"           → request.user.is_authenticated
-        # }
-        # POST: request.data        参数位置: 请求体(HTTP Body)中, 而不是URL
-        # GET: request.query_params 参数位置: URL末尾的问号之后
         serializer = LoginSerializer(data=request.data) # get username and password from request
         if not serializer.is_valid():
             return Response({
                 "success": False,
                 "message": "Please check input.",
-                "errors": serializer.errors,    # You must call .is_valid() before accessing .errors
+                "errors": serializer.errors,
             }, status=400)
 
-        # username = request.data.get('username')           # ❌原始请求数据, 未校验
-        # username = serializer.validated_data['username']  # ✅serializer 校验后的数据; 会抛 KeyError
         username = serializer.validated_data.get('username')
         password = serializer.validated_data.get('password')
 
@@ -127,18 +106,6 @@ class AccountViewSet(viewsets.ViewSet):
             "success": True,
             "user": UserSerializer(instance=user).data,
         })
-
-    """
-    在请求 login 前
-    request.user = AnonymousUser
-    request.data = 客户端发送的用户名和密码（未校验）
-    request.user.is_authenticated = False
-
-    调用 django_authenticate {检查用户名密码是否正确} + login {将 user 信息写入 session} 后:
-    request.user = 已登录的 User 对象
-    request.session 中保存了登录状态
-    request.user.is_authenticated = True
-    """
 
     @action(methods=['POST'], detail=False)
     def signup(self, request):
