@@ -24,18 +24,6 @@ class LoginSerializer(serializers.Serializer):
         return data
 
 
-"""
-Serializer：
-  - 不绑定 Model
-  - 字段和 create()/update() 需要自己写
-  - serializer.save() 是否可用取决于是否自定义 create()
-
-ModelSerializer：
-  - 绑定 Model
-  - 自动生成字段
-  - 默认提供 create() 和 update()
-  - serializer.save() 会直接创建或更新数据库记录 via create() | update()
-"""
 class SignupSerializer(serializers.ModelSerializer):
     username = serializers.CharField(max_length=20, min_length=6)
     password = serializers.CharField(max_length=20, min_length=6)
@@ -52,7 +40,6 @@ class SignupSerializer(serializers.ModelSerializer):
         步骤 3：全局验证 validate(self, data)  serializers.py: def validate(self, data): 会覆盖父类的全局 validate 方法
         """
     def validate(self, data):
-        # will be called when .is_valid() is called
         if User.objects.filter(username=data.get('username').lower()).exists():
             raise exceptions.ValidationError({
                 'username': 'This username has been occupied.',
