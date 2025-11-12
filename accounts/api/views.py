@@ -66,18 +66,18 @@ class AccountViewSet(viewsets.ViewSet):
         }
         if request.user.is_authenticated:
             data['user'] = UserSerializer(request.user).data
-        return Response(data)
+        return Response(data=data)
 
     @action(methods=['POST'], detail=False)
     def logout(self, request):
         django_logout(request)
-        return Response({'success': True})
+        return Response(data={'success': True})
 
     @action(methods=['POST'], detail=False)
     def login(self, request):
         serializer = LoginSerializer(data=request.data) # get username and password from request
         if not serializer.is_valid():
-            return Response({
+            return Response(data={
                 "success": False,
                 "message": "Please check input.",
                 "errors": serializer.errors,
@@ -96,13 +96,13 @@ class AccountViewSet(viewsets.ViewSet):
 
         user = django_authenticate(username=username, password=password)
         if not user or user.is_anonymous:
-            return Response({
+            return Response(data={
                 "success": False,
                 "message": "Username and password does not match.",
             }, status=400)
 
         django_login(request, user)
-        return Response({
+        return Response(data={
             "success": True,
             "user": UserSerializer(instance=user).data,
         })
@@ -111,7 +111,7 @@ class AccountViewSet(viewsets.ViewSet):
     def signup(self, request):
         serializer = SignupSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response({
+            return Response(data={
                 "success": False,
                 "message": "Please check input.",
                 "errors": serializer.errors,
@@ -119,7 +119,7 @@ class AccountViewSet(viewsets.ViewSet):
 
         user = serializer.save()
         django_login(request, user)
-        return Response({
+        return Response(data={
             'success': True,
             'user': UserSerializer(instance=user).data,
         }, status=201)

@@ -15,12 +15,13 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from debug_toolbar.toolbar import debug_toolbar_urls
 from django.contrib import admin
 from django.urls import include, path
-from debug_toolbar.toolbar import debug_toolbar_urls
 from rest_framework import routers
 
 from accounts.api.views import UserViewSet, AccountViewSet
+from tweets.api.views import TweetViewSet
 
 # DRF提供的一个'自动路由器', 能自动根据ViewSet生成 标准RESTful风格的URL
 router = routers.DefaultRouter()
@@ -30,6 +31,7 @@ router = routers.DefaultRouter()
 # /api/users/{pk}/  base_name: 'XXX-detail' retrieve, update/partial_update, destroy
 router.register(r'api/users', UserViewSet)
 router.register(r'api/accounts', AccountViewSet, basename='accounts')
+router.register(r'api/tweets', TweetViewSet, basename='tweets')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

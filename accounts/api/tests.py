@@ -1,4 +1,4 @@
-from django.test import TestCase
+from testing.testcases import TestCase
 from rest_framework.test import APIClient   # 用于在测试中发送 API 请求
 from django.contrib.auth.models import User
 
@@ -20,9 +20,6 @@ class AccountApiTests(TestCase):
             email='tester@example.com',
         )
         # self.user.password 哈希加密后的密码
-
-    def create_user(self, username, password, email):
-        return User.objects.create_user(username=username, password=password, email=email)
 
     def test_login(self):
         # 每个测试函数必须以 test_ 开头，才会被自动调用 进行测试
