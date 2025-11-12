@@ -8,6 +8,10 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ('id', 'username', 'email',)
 
+class UserSerializerForTweet(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username',)
 
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
@@ -63,6 +67,7 @@ class SignupSerializer(serializers.ModelSerializer):
 
         # .create_user() 密码存入数据库时是哈希加密的 user.set_password(password)
         # password = "pbkdf2_sha256$390000$Uq4Wj7..."
+        # username 和 email 需要进行一些 normalize 规范化处理
         # 创建用户时必须使用 create_user() {user.set_password()}
         user = User.objects.create_user(
             username=username,
