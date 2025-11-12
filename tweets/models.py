@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from utils.time_helpers import utc_now
 
 class Tweet(models.Model):
-    user = models.ForeignKey(
+    user = models.ForeignKey(   # user.tweet_set 等价于 Tweet.objects.filter(user=user)
         User,
         on_delete=models.SET_NULL,
         null=True,
