@@ -1,5 +1,6 @@
-from django.test import TestCase as DjangoTestCase
 from django.contrib.auth.models import User
+from django.test import TestCase as DjangoTestCase
+
 from tweets.models import Tweet
 
 

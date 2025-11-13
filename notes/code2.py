@@ -35,5 +35,10 @@ python manage.py runserver [127.0.0.1:8000]
 | 宿主机访问 `localhost:8000`|`127.0.0.1:8000` | ❌ 不行    | 宿主机和虚拟机是两个不同的“本机”  |
 | 宿主机访问 `192.168.33.10:8000`              | ❌ 不行    | Django 没监听虚拟机的对外网络接口 |
 
+================================================================================================================
+
+@action(methods=['POST'], detail=True, permission_classes=[IsAuthenticated])
+detail=True 的 actions 会默认先去调用 get_object() {get_object_or_404()} 也就是
+queryset.filter(pk=1) 查询一下这个 object 在不在
 
 """
