@@ -21,7 +21,9 @@ from django.urls import include, path
 from rest_framework import routers
 
 from accounts.api.views import UserViewSet, AccountViewSet
+from friendships.api.views import FriendshipViewSet
 from tweets.api.views import TweetViewSet
+
 
 # DRF提供的一个'自动路由器', 能自动根据ViewSet生成 标准RESTful风格的URL
 router = routers.DefaultRouter()
@@ -32,6 +34,7 @@ router = routers.DefaultRouter()
 router.register(r'api/users', UserViewSet)
 router.register(r'api/accounts', AccountViewSet, basename='accounts')
 router.register(r'api/tweets', TweetViewSet, basename='tweets')
+router.register(r'api/friendships', FriendshipViewSet, basename='friendships')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

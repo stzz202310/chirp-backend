@@ -28,6 +28,7 @@ class Friendship(models.Model):
             ('to_user', 'created_at'),   # 粉丝列表 to_user=我:   获取关注我的所有人，按照关注时间排序
         )
         unique_together = (('from_user', 'to_user'),)   # 数据库层面 防止 重复关注
+        ordering = ('-created_at',) # 对所有的查询结果 QuerySet 都有效
 
     def __str__(self):
         return '{} followed {}'.format(self.from_user_id, self.to_user_id)
