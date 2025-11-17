@@ -96,12 +96,13 @@ self.assertEqual(response.data['has_logged_in'], False)
 
 ================================================================================================================
 
-class Serializer:
-    def __init__(self, instance=None, data=empty, **kwargs):
-    def validate(self, data): return data                   # will be called when .is_valid() is called
-    def create(self, validated_data): return instance
+class Serializer(serializers.ModelSerializer):
     class Meta: model = User    fields = ('username', 'email',)
-    
+
+    def __init__(self, instance=None, data=empty, **kwargs):    
+    def validate(self, attrs): return attrs     # will be called when .is_valid() is called
+    def create(self, validated_data): return instance
+
 1 序列化（将对象 -> JSON/字典）
     serializer = LoginSerializer(instance=user)
     serializer.data  # 得到序列化后的字典
@@ -109,7 +110,10 @@ class Serializer:
     1. if tweets 是一个 QuerySet
     2. if tweets 是一个模型对象列表 (如[tweet1, tweet2, tweet3])
     serializer = TweetSerializer(instance=tweets, many=True)
-    serializer.data  # 得到序列化后的字典 (list of dict)
+    # 一般来说 json 格式的 response 默认都要用 hash 的格式
+    # 而不能用 list 的格式（约定俗成）
+    return Response(data={'tweets': serializer.data})
+
 
 2 反序列化（验证客户端数据 -> Python 对象）
     serializer = LoginSerializer(data=request.data)
@@ -121,9 +125,18 @@ class Serializer:
     serializer = TweetSerializerForCreate(data=request.data, context={'request': request},)
     serializers.py|def create(self, validated_data): user = self.context['request'].user
 
+
 3 初始化时最好显式写出 instance= 或 data=，避免 DRF 把参数搞反, 推荐写法
+    def __init__(self, instance=None, data=empty, **kwargs):
     serializer = LoginSerializer(data=request.data)
     serializer = LoginSerializer(instance=user)
+
+
+4. def create(self, validated_data): return instance
+    self = 当前 Serializer 实例
+    validated_data = self.validated_data, create(validated_data) 传参数是为了
+        a. 与 update(instance, validated_data) 接口一致
+        b. 保持 create() 接口独立，可测试，不依赖 Serializer 的状态
 
 
 serializer = LoginSerializer(data=request.data)

@@ -8,8 +8,8 @@ from friendships.models import Friendship
 
 # 可以通过 source=xxx 指定去访问 model instance 的 xxx property
 # 即 model_instance.xxx 来获得数据
-class FollowerSerializer(serializers.ModelSerializer):  # 粉丝列表
-    user = UserSerializerForFriendship(source='from_user')
+class FollowerSerializer(serializers.ModelSerializer):      # 粉丝列表
+    user = UserSerializerForFriendship(source='from_user')  # 类似 别名, from_user AS user
     # user = UserSerializerForFriendship(input -> friendship.from_user)
 
     class Meta:
@@ -59,6 +59,8 @@ class FriendShipSerializerForCreate(serializers.ModelSerializer):
 
     def create(self, validated_data):
         friendship = Friendship.objects.create(
+            # Friendship.objects.create(from_user=user_obj)
+            # Friendship.objects.create(from_user_id=1)
             from_user_id=validated_data['from_user_id'],
             to_user_id=validated_data['to_user_id'],
         )

@@ -38,6 +38,11 @@ class FriendshipService(object):
         friendships = Friendship.objects.filter(
             to_user=user,
         ).prefetch_related('from_user')
+        # prefetch_related('from_user') 并不会立即查询数据库，而是
+        # 1. 在 QuerySet 上标记：告诉 Django “当你真正访问 from_user 时，请批量取出相关对象”
+        # 2. 延迟执行：数据库查询会在你访问数据时触发（比如迭代或 list(friendships)）
+        # 3. 执行后: QuerySet 中每个 friendship.from_user 会被 指向缓存好的 User 实例，不会再发 SQL
+        #    {from_user_id1: <User instance>,
+        #     from_user_id2: <User instance>, ...}
         return [friendship.from_user for friendship in friendships]
-        # friendship.from_user: 已经缓存的 User 实例, 再次访问时不会再执行 SQL
         # 正确的写法三: 直接用 user_id instead of user

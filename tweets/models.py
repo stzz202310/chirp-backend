@@ -13,7 +13,7 @@ class Tweet(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        index_together = (('user', 'created_at'),)
+        index_together = (('user', 'created_at'),) # show index from `tweets_tweet`
         ordering = ('user', '-created_at',) # 不会对数据库产生影响，只会影响 QuerySet
 
     @property
@@ -22,4 +22,5 @@ class Tweet(models.Model):
         return (utc_now() - self.created_at).seconds // 3600
 
     def __str__(self):  # print(tweet instance)
+        # 这里是你执行 print(tweet instance) 的时候会显示的内容
         return f'{self.created_at} {self.user}: {self.content}'
