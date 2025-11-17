@@ -9,6 +9,7 @@ class NewsFeed(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     tweet = models.ForeignKey(Tweet, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # [冗余]等于tweet.created_at; 原因 必须是字段，才能 index_together
 
     class Meta:
         index_together = (('user', 'created_at'),)
