@@ -47,9 +47,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    # third party
     'rest_framework',
     "debug_toolbar",
 
+    # project apps
     'accounts',
     'tweets',
     'friendships',
@@ -59,6 +61,10 @@ INSTALLED_APPS = [
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10
+    # client 客户端传入这个参数
+    # web client        page_size = 20 to 50
+    # phone app client  page_seize = 10
+    # pad app client, 嵌入式 client ...
 }
 
 # 所有的 HTTP 请求和响应都会按顺序依次经过这些 middleware

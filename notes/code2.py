@@ -41,4 +41,26 @@ python manage.py runserver [127.0.0.1:8000]
 detail=True 的 actions 会默认先去调用 get_object() {get_object_or_404()} 也就是
 queryset.filter(pk=1) 查询一下这个 object 在不在
 
+================================================================================================================
+
+排序 [不会对数据库产生影响，只会影响 QuerySet]
+1. class Tweet(models.Model): class Meta: ordering = ('-created_at',)       不推荐，潜规则
+2. tweets = Tweet.objects.filter(user_id=user_id).order_by('-created_at')   推荐，明显直观 [2会覆盖1]
+
+================================================================================================================
+
+from_user       模型字段名|外键字段      接收 User 对象
+from_user_id    数据库列               接收用户 ID（整数）
+
+⚠️ 对象 → 用 from_user
+⚠️ ID  → 用 from_user_id
+
+⚠️ 模型索引/约束（index_together, UniqueConstraint）必须写 from_user（模型字段名）
+
+1 Serializer 决定 validated_data 是 "对象" 还是 "ID"
+
+2 查询中可以灵活使用 from_user 或 from_user_id
+    Friendship.objects.filter(from_user=user_obj)      # 传对象
+    Friendship.objects.filter(from_user_id=user_id)    # 传 ID
+
 """

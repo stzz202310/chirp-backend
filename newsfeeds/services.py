@@ -21,3 +21,12 @@ class NewsFeedService(object):
         # 自己也能看到 自己发的帖子
         newsfeeds.append(NewsFeed(user=tweet.user, tweet=tweet))
         NewsFeed.objects.bulk_create(newsfeeds)
+        # INSERT INTO `newsfeeds_newsfeed` (`user_id`, `tweet_id`, `created_at`)
+        # VALUES
+        # (1, 2, '2025-08-01 19:00:00.000000')
+        # (2, 2, '2025-08-01 19:00:00.000000')
+        # (3, 2, '2025-08-01 19:00:00.000000')
+
+        # INSERT INTO `newsfeeds_newsfeed` (`user_id`, `tweet_id`, `created_at`) VALUES (1, 2, '2025-08-01 19:00:00.000000')
+        # INSERT INTO `newsfeeds_newsfeed` (`user_id`, `tweet_id`, `created_at`) VALUES (2, 2, '2025-08-01 19:00:00.000000')
+        # INSERT INTO `newsfeeds_newsfeed` (`user_id`, `tweet_id`, `created_at`) VALUES (3, 2, '2025-08-01 19:00:00.000000')
