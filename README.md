@@ -31,8 +31,9 @@ A practice project: implementing a simplified **Twitter backend** with **Django*
    
 3. Run Django commands
    ```bash
-   python manage.py migrate      # Apply database migrations
+   python manage.py makemigrations
    python manage.py test         # Run unit tests
+   python manage.py migrate      # Apply database migrations
    python manage.py runserver 0.0.0.0:8000
    # Start the development server, then open http://localhost in your browser
    

@@ -63,4 +63,13 @@ from_user_id    数据库列               接收用户 ID（整数）
     Friendship.objects.filter(from_user=user_obj)      # 传对象
     Friendship.objects.filter(from_user_id=user_id)    # 传 ID
 
+================================================================================================================
+
+(1) 更改 models
+(2) makemigrations   ← 让迁移文件跟上你的代码
+(3) test             ← 使用包含 {最新迁移文件} 的测试数据库
+(4) 如果有问题 再次修改 ← 重复1-3
+(5) migrate          ← 应用到正式数据库
+
+
 """
