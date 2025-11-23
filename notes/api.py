@@ -2,6 +2,20 @@ print(1)
 
 
 """
+POST    /api/XXXs/      create
+GET     /api/XXXs/      list        (read)
+GET     /api/XXXs/1/    retrieve    (read)
+DELETE  /api/XXXs/1/    destroy
+PATCH   /api/XXXs/1/    partial_update
+PUT     /api/XXXs/1/    update
+
+def get_permissions(self):
+    if self.action == 'create':
+        return [IsAuthenticated()]
+    return [AllowAny()]
+
+==============================================================================
+
 /admin/
 
 GET /api/users/                 ReadOnlyModelViewSet
@@ -28,5 +42,8 @@ GET /api/friendships/?from_user_id=1&to_user_id=2      查询两个人之间是�
 [Optional: retrieve]
 GET /api/friendships/1/?action=followers    查询某个用户的粉丝列表
 GET /api/friendships/1/?action=followings   查询某个用户的关注列表
+
+POST /api/comments/     create
+
 
 """

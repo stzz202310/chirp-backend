@@ -28,7 +28,7 @@ from rest_framework.test import APIClient
                                                `serializer.save()` 是否可用取决于是否自定义了 `create()` |
 
 ModelViewSet：[尽量不要用] 方便但暴露多(自动暴露所有 CRUD)，容易出现安全漏洞
-ViewSet：需要手动实现，但更安全、更灵活，推荐在涉及用户账户或敏感数据的接口使用
+ViewSet：需要手动实现，但更安全、更灵活，推荐在涉及用户账户或敏感数据的接口使用 [白名单: 需要什么加什么]
 
 | 特性          | `ModelViewSet`                               | `ViewSet`           |
 | ------------ | -------------------------------------------- | ------------------- |
@@ -123,7 +123,11 @@ class Serializer(serializers.ModelSerializer):
     serializer.save()       # create() or update()
     
     serializer = TweetSerializerForCreate(data=request.data, context={'request': request},)
-    serializers.py|def create(self, validated_data): user = self.context['request'].user
+    serializers.py|def create(self, validated_data): user = self.context['request'].user        OR
+    data = {'user_id': request.user.id,
+            'tweet_id': request.data.get('tweet_id'),
+            'content': request.data.get('content'),}
+    serializer = CommentSerializerForCreate(data=data)
 
 
 3 初始化时最好显式写出 instance= 或 data=，避免 DRF 把参数搞反, 推荐写法
