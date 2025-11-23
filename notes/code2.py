@@ -58,12 +58,6 @@ python manage.py runserver [127.0.0.1:8000]
 
 ================================================================================================================
 
-@action(methods=['POST'], detail=True, permission_classes=[IsAuthenticated])
-detail=True 的 actions 会默认先去调用 get_object() {get_object_or_404()} 也就是
-queryset.filter(pk=1) 查询一下这个 object 在不在
-
-================================================================================================================
-
 排序 [不会对数据库产生影响，只会影响 QuerySet]
 1. class Tweet(models.Model): class Meta: ordering = ('-created_at',)       不推荐，潜规则
 2. tweets = Tweet.objects.filter(user_id=user_id).order_by('-created_at')   推荐，明显直观 [2会覆盖1]

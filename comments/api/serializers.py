@@ -38,3 +38,14 @@ class CommentSerializerForCreate(serializers.ModelSerializer):
         # 必须 return validated data
         # 也就是验证过之后，进行过处理的输入数据 [当然，也可以是不做处理的数据]
         return attrs
+
+class CommentSerializerForUpdate(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = ('content',)   # update: 只能修改 content
+
+    def update(self, instance, validated_data):
+        instance.content = validated_data.get('content')
+        instance.save()
+        # update 方法要求 return 修改后的 instance 作为返回值
+        return instance

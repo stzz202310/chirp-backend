@@ -1,9 +1,11 @@
 from rest_framework import status
 from rest_framework.test import APIClient
-
+from django.utils import timezone
+from comments.models import Comment
 from testing.testcases import TestCase
 
 COMMENT_URL = '/api/comments/'
+COMMENT_DETAIL_URL = '/api/comments/{}/'
 
 
 class CommentAPITest(TestCase):
@@ -53,3 +55,57 @@ class CommentAPITest(TestCase):
         self.assertEqual(response.data['user']['id'], self.taotao.id)
         self.assertEqual(response.data.get('tweet_id'), self.tweet.id)
         self.assertEqual(response.data.get('content'), '1')
+
+    def test_destroy(self):
+        comment = self.create_comment(self.taotao, self.tweet)
+        url = '{}{}/'.format(COMMENT_URL, comment.id)
+
+        # 1. 匿名不可以删除
+        response = self.anonymous_client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 2. 非本人不能删除
+        response = self.zhuzhu_client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 3. 本人可以删除
+        count = Comment.objects.count()
+        response = self.taotao_client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Comment.objects.count(), count - 1)
+
+    def test_update(self):
+        comment = self.create_comment(self.taotao, self.tweet, 'original')
+        another_tweet = self.create_tweet(self.zhuzhu)
+        # url = '{}{}/'.format(COMMENT_URL, comment.id)
+        url = COMMENT_DETAIL_URL.format(comment.id)
+
+        # 1. 匿名不可以更新
+        response = self.anonymous_client.put(url, data={'content': 'new'})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 2. 非本人不能更新
+        response = self.zhuzhu_client.put(url, data={'content': 'new'})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data['detail'], 'You do not have permission to access this object.')
+        comment.refresh_from_db()   # comment 不会自动更新
+        self.assertEqual(comment.content, 'original')
+
+        # 3. 只能更新 content，不能更新其他 fields 静默处理
+        before_updated_at = comment.updated_at
+        before_created_at = comment.created_at
+        now = timezone.now()
+        response = self.taotao_client.put(url, data={
+            'content': 'new',
+            'user_id': self.zhuzhu.id,
+            'tweet_id': another_tweet.id,
+            'created_at': now,
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        comment.refresh_from_db()
+        self.assertEqual(comment.content, 'new')
+        self.assertEqual(comment.user, self.taotao)
+        self.assertEqual(comment.tweet, self.tweet)
+        self.assertEqual(comment.created_at, before_created_at)
+        self.assertNotEqual(comment.created_at, now)
+        self.assertNotEqual(comment.updated_at, before_updated_at)
