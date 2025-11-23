@@ -27,13 +27,15 @@ from rest_framework.test import APIClient
                                                需要手动定义字段和 `create()` / `update()` 方法
                                                `serializer.save()` 是否可用取决于是否自定义了 `create()` |
 
-ModelViewSet：[尽量不要用] 方便但暴露多(自动暴露所有 CRUD)，容易出现安全漏洞
-ViewSet：需要手动实现，但更安全、更灵活，推荐在涉及用户账户或敏感数据的接口使用 [白名单: 需要什么加什么]
+================================================================================================================
 
-| 特性          | `ModelViewSet`                               | `ViewSet`           |
-| ------------ | -------------------------------------------- | ------------------- |
+ModelViewSet：[尽量不要用] 使用简单，但容易不小心暴露不必要的接口 (自动暴露所有 CRUD)
+GenericViewSet：需要手动实现，但更安全、更灵活，推荐在涉及用户账户或敏感数据的接口使用 [白名单: 需要什么加什么]
+关联模型: 通过`queryset`[def get_queryset(self):...] 和`serializer_class`
+
+| 特性          | `ModelViewSet`                               | `GenericViewSet`                 |
+| ------------ | -------------------------------------------- | -------------------------------- |
 | 自动生成 CRUD | ✅（list, create, retrieve, update, destroy） | ❌ 需要自己手动实现方法             |
-| 自动关联模型   | ✅ 通过`queryset`和`serializer_class`[⚠️必须]  | ❌ 没有自动绑定模型，需要自己处理数据 |
 | 灵活性        | 较低（自动暴露所有 CRUD）                        | 高（只暴露你想实现的接口）           |
 
 ================================================================================================================
@@ -99,9 +101,16 @@ self.assertEqual(response.data['has_logged_in'], False)
 class Serializer(serializers.ModelSerializer):
     class Meta: model = User    fields = ('username', 'email',)
 
-    def __init__(self, instance=None, data=empty, **kwargs):    
-    def validate(self, attrs): return attrs     # will be called when .is_valid() is called
-    def create(self, validated_data): return instance
+    def __init__(self, instance=None, data=empty, **kwargs):
+    
+    # views.py 
+    #   serializer.is_valid():  调用 validate
+    #   serializer.save():      调用 create() without instance | update() with instance
+        
+    def validate(self, attrs):  return attrs [validated data: 验证+处理后的输入数据，也可以是未处理的原数据]
+    def create(self, validated_data):           return instance
+    def update(self, instance, validated_data): return instance [修改后的 instance]
+
 
 1 序列化（将对象 -> JSON/字典）
     serializer = LoginSerializer(instance=user)
@@ -118,9 +127,9 @@ class Serializer(serializers.ModelSerializer):
 2 反序列化（验证客户端数据 -> Python 对象）
     serializer = LoginSerializer(data=request.data)
     serializer.is_valid()   # 调用验证逻辑
-    serializer.errors
+    serializer.errors       # You must call .is_valid() before accessing .errors
     serializer.validated_data
-    serializer.save()       # create() or update()
+    serializer.save()       # create() or update(): return instance
     
     serializer = TweetSerializerForCreate(data=request.data, context={'request': request},)
     serializers.py|def create(self, validated_data): user = self.context['request'].user        OR
@@ -139,18 +148,12 @@ class Serializer(serializers.ModelSerializer):
 4. def create(self, validated_data): return instance
     self = 当前 Serializer 实例
     validated_data = self.validated_data, create(validated_data) 传参数是为了
-        a. 与 update(instance, validated_data) 接口一致
+        a. 与 def update(self, instance, validated_data) 接口一致
         b. 保持 create() 接口独立，可测试，不依赖 Serializer 的状态
 
-
-serializer = LoginSerializer(data=request.data)
-serializer.is_valid()
-serializer.errors   # You must call .is_valid() before accessing .errors
-user = serializer.save() ==> Signup
 
 username = serializer.validated_data.get('username') ==> Login
 username = request.data.get('username')           # ❌原始请求数据, 未校验
 username = serializer.validated_data['username']  # ✅serializer 校验后的数据; 会抛 KeyError
-password = serializer.validated_data.get('password')
 
 """
