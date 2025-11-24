@@ -14,8 +14,9 @@ constantly==15.1.0
 cryptography==3.4.8
 dbus-python==1.2.18
 distro==1.7.0
-Django==4.2.25
+Django==5.2.8
 django-debug-toolbar==6.1.0
+django-filter==25.2
 djangorestframework==3.16.1
 httplib2==0.20.2
 hyperlink==21.0.0

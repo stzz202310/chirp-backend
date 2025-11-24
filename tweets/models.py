@@ -13,7 +13,10 @@ class Tweet(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        index_together = (('user', 'created_at'),) # show index from `tweets_tweet`
+        indexes = [
+            models.Index(fields=('user', 'created_at'),),
+        ]
+        # index_together = (('user', 'created_at'),) # show index from `tweets_tweet`
         ordering = ('user', '-created_at',) # 不会对数据库产生影响，只会影响 QuerySet
 
     @property

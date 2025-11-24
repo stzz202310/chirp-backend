@@ -20,6 +20,7 @@ class CommentViewSet(viewsets.GenericViewSet):
     # queryset: self.get_object()
     serializer_class = CommentSerializerForCreate
     queryset = Comment.objects.all()
+    filterset_fields = ('tweet_id',)
 
     def get_permissions(self):
     # 需要实例化权限类，例如 AllowAny() 或 IsAuthenticated()
@@ -30,6 +31,30 @@ class CommentViewSet(viewsets.GenericViewSet):
             # 先检查 是否登陆，再检查 request.user == comment的owner
             return [IsAuthenticated(), IsObjectOwner()]
         return [AllowAny()]
+
+    def list(self, request, *args, **kwargs):
+        if 'tweet_id' not in request.query_params:
+            return Response(data={
+                'message': 'missing tweet_id in request',
+                'success': False,
+            }, status=status.HTTP_400_BAD_REQUEST)
+        # tweet_id = request.query_params.get('tweet_id')
+        # comments = Comment.objects.filter(tweet_id=tweet_id)
+        queryset = self.get_queryset()
+        # select_related [join]; null [n + 1 queries]
+        comments = self.filter_queryset(queryset=queryset)\
+            .prefetch_related('user')\
+            .order_by('created_at')
+        # 1. 检查视图中是否配置 filter_backends
+        # 2. 依次调用每个 filter backend 的 filter_queryset 方法 [DjangoFilterBackend]
+        #    DjangoFilterBackend: 它会根据 filterset_fields 去过滤 queryset
+        #    DRF 会根据 request.query_params 自动生成过滤条件
+        # 3. 返回经过所有过滤器处理后的 queryset
+        serializer = CommentSerializer(comments, many=True)
+        return Response(
+            data={'comments': serializer.data},
+            status=status.HTTP_200_OK,
+        )
 
     def create(self, request, *args, **kwargs):
         data = {

@@ -1,6 +1,7 @@
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
-from django.utils import timezone
+
 from comments.models import Comment
 from testing.testcases import TestCase
 
@@ -109,3 +110,37 @@ class CommentAPITest(TestCase):
         self.assertEqual(comment.created_at, before_created_at)
         self.assertNotEqual(comment.created_at, now)
         self.assertNotEqual(comment.updated_at, before_updated_at)
+
+    def test_list(self):
+        pass
+        # 1. 必须带 tweet_id
+        response = self.anonymous_client.get(COMMENT_URL)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 2. 带了 tweet_id 可以访问 [一开始没有评论]
+        response = self.anonymous_client.get(COMMENT_URL, data={
+            'tweet_id': self.tweet.id,
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['comments']), 0)
+
+        # 3. 评论按照时间顺序排序
+        another_tweet = self.create_tweet(self.zhuzhu)
+        self.create_comment(self.taotao, self.tweet, '1')
+        self.create_comment(self.zhuzhu, self.tweet, '2')
+        self.create_comment(self.zhuzhu, another_tweet, '3')
+        response = self.anonymous_client.get(COMMENT_URL, data={
+            'tweet_id': self.tweet.id,
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['comments']), 2)
+        self.assertEqual(response.data['comments'][0]['content'], '1')
+        self.assertEqual(response.data['comments'][1]['content'], '2')
+
+        # 4. 同时提供 user_id 和 tweet_id, 只有 tweet_id 会在 filter 中生效
+        response = self.anonymous_client.get(COMMENT_URL, data={
+            'tweet_id': self.tweet.id,
+            'user_id': self.taotao.id,
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['comments']), 2)

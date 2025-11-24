@@ -2,8 +2,18 @@ print(1)
 
 
 """
-MySQL
+python manage.py shell
+
+from tweets.models import Tweet
+qs = Tweet.objects.all()
+print(qs.query)
+
+==========================================================================================
+
 1. 不要用 JOIN
+    例子: friendships.services | comments.api.views
+    ❌select_related, ✅prefetch_related
+    
     a. JOIN 本身并不快 [Web后端需要秒回, 不要用JOIN]
     b. JOIN 必须在同一实例内执行 [同一个 MySQL 进程里, 同一物理机器上]
         当你做了 sharding：
@@ -17,8 +27,9 @@ MySQL
 3. DROP FOREIGN KEY CONSTRAINT [TODO]
 
 4. N + 1 Queries: 1个 API request 对应 常数级别的 DB queries [10次]
-    例子: newsfeeds.services｜friendships.services
-    for 循环 {Query 多次插入}
+    例子: newsfeeds.services｜friendships.services | comments.api.views
+    ❌for 循环 {Query 多次查找}, ✅prefetch_related
+    ❌for 循环 {Query 多次插入}, ✅bulk_create
     
     web (client) <-> db (server) 不同机器 需要数据传输和校验
     假设 通讯时间 10ms，SQL操作时间 1ms
