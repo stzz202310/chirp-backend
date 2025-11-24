@@ -40,5 +40,6 @@ A practice project: implementing a simplified **Twitter backend** with **Django*
    python manage.py createsuperuser      # Create an admin super user (for Django admin)
    django-admin.py startproject twitter  # Create a new Django project named "twitter"
    python manage.py startapp accounts    # Create a new app called "accounts"
+   python manage.py shell                # Open the Django shell (interactive Python environment)
 
 ---

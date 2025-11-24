@@ -2,9 +2,9 @@ print(1)
 
 
 """
-POST    /api/XXXs/      create
-GET     /api/XXXs/      list        [read]
-GET     /api/XXXs/1/    retrieve    [read]
+POST    /api/XXXs/      create      [write: request.data]
+GET     /api/XXXs/      list        [read: request.query_params]
+GET     /api/XXXs/1/    retrieve    [read: request.query_params]
 DELETE  /api/XXXs/1/    destroy
 PATCH   /api/XXXs/1/    partial_update
 PUT     /api/XXXs/1/    update      [api.tests: comment.refresh_from_db()]
@@ -77,6 +77,7 @@ GET /api/friendships/1/?action=followings   查询某个用户的关注列表
 POST    /api/comments/      create
 PUT     /api/comments/1/    update
 DELETE  /api/comments/1/    destroy
+GET     /api/comments/?tweet_id=1   list
 
 
 """

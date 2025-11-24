@@ -17,7 +17,10 @@ class Comment(models.Model):
 
     class Meta:
         # 有在某个 Tweet 下排序所有 comments 的需求
-        index_together = (('tweet', 'created_at'),)
+        # index_together = (('tweet', 'created_at'),)
+        indexes = [
+            models.Index(fields=('tweet', 'created_at'),),
+        ]
 
     def __str__(self):
         return '{} - {} says {} at tweet {}'.format(

@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-8$!(l%_g+2@_zo20t60o!$a3djbwonviy)zv$zs($=y6lfw1x!'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['127.0.0.1', '192.168.33.10', 'localhost',]
 INTERNAL_IPS = ['10.0.2.2',]
@@ -40,6 +40,7 @@ INTERNAL_IPS = ['10.0.2.2',]
 # Application definition
 
 INSTALLED_APPS = [
+    # django default
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -50,6 +51,7 @@ INSTALLED_APPS = [
     # third party
     'rest_framework',
     "debug_toolbar",
+    'django_filters',
 
     # project apps
     'accounts',
@@ -61,11 +63,15 @@ INSTALLED_APPS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10
+    'PAGE_SIZE': 10,
     # client 客户端传入这个参数
     # web client        page_size = 20 to 50
     # phone app client  page_seize = 10
     # pad app client, 嵌入式 client ...
+
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+    ],
 }
 
 # 所有的 HTTP 请求和响应都会按顺序依次经过这些 middleware
@@ -160,20 +166,7 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'level': 'INFO',   # DEBUG -> INFO
-            'class': 'logging.StreamHandler',
-        },
-    },
-    'loggers': {
-        'django.db.backends': {
-            'handlers': ['console'],
-            'level': 'INFO',    # DEBUG -> INFO
-            'propagate': False,  # 不向上冒泡 True -> False
-        },
-    },
-}
+try:
+    from twitter.local_settings import *
+except:
+    pass
