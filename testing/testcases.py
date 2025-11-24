@@ -31,6 +31,12 @@ class TestCase(DjangoTestCase):
             password=password,
         )
 
+    def create_user_and_client(self, *args, **kwargs):
+        user = self.create_user(*args, **kwargs)
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return user, client
+
     def create_tweet(self, user, content=None):
         if content is None:
             content = 'default tweet content'

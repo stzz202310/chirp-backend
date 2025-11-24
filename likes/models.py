@@ -33,7 +33,7 @@ class Like(models.Model):
         ]
         # 这个 index 的作用是可以按照时间顺序排序 {content_object: content_type + object_id} 的所有likes
         # 1. 某个 tweet | comment 所有 [按照时间排序] 的likes
-        # 2. 某个 user 给哪些 tweet | comment 点过赞
+        # 2. 某个 user 给哪些 tweet | comment [按照时间排序] 点过赞
         indexes = [
             models.Index(fields=('content_type', 'object_id', 'created_at'),),
             models.Index(fields=('user', 'content_type', 'created_at'),),
