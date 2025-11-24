@@ -1,17 +1,27 @@
 from datetime import timedelta
 
-from django.contrib.auth.models import User
-from django.test import TestCase
-
-from tweets.models import Tweet
+from testing.testcases import TestCase
 from utils.time_helpers import utc_now
 
 
 class TweetTests(TestCase):
 
+    def setUp(self):
+        self.taotao = self.create_user('taotao')
+        self.zhuzhu = self.create_user('zhuzhu')
+        self.tweet = self.create_tweet(user=self.taotao, content='hello zhuzhu')
+
     def test_hours_to_now(self):
-        taotao = User.objects.create_user(username='taotao')
-        tweet = Tweet.objects.create(user=taotao, content='Hello Zhuzhu')
-        tweet.created_at = utc_now() -timedelta(hours=10)
-        tweet.save()
-        self.assertEqual(tweet.hours_to_now, 10)
+        self.tweet.created_at = utc_now() - timedelta(hours=10)
+        self.tweet.save()
+        self.assertEqual(self.tweet.hours_to_now, 10)
+
+    def test_like_set(self):
+        self.create_like(user=self.taotao, target=self.tweet)
+        self.assertEqual(self.tweet.like_set.count(), 1)
+
+        self.create_like(user=self.taotao, target=self.tweet)
+        self.assertEqual(self.tweet.like_set.count(), 1)
+
+        self.create_like(user=self.zhuzhu, target=self.tweet)
+        self.assertEqual(self.tweet.like_set.count(), 2)
