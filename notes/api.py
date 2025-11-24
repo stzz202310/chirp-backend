@@ -80,5 +80,7 @@ PUT     /api/comments/1/    update
 DELETE  /api/comments/1/    destroy
 GET     /api/comments/?tweet_id=1   list
 
+POST    /api/likes/         create
+
 
 """
