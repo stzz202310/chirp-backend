@@ -81,6 +81,8 @@ DELETE  /api/comments/1/    destroy
 GET     /api/comments/?tweet_id=1   list
 
 POST    /api/likes/         create
+POST    /api/likes/cancel/  cancel  ✅
+DELETE  /api/likes/1/       destroy ❌ 依赖like.id: 前端 点赞 ==> 后端 返回like.id => 前端 才能取消赞
 
 
 """
