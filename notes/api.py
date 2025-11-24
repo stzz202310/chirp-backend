@@ -58,6 +58,7 @@ POST /api/accounts/logout/
 GET  /api/accounts/login_status/
 
 GET  /api/tweets/?user_id=1     list
+GET  /api/tweets/1/             retrieve
 POST /api/tweets/               create
 
 POST /api/friendships/1/follow/     当前用户关注 follow   user_id=1 的用户

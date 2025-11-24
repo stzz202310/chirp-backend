@@ -1,24 +1,28 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from newsfeeds.services import NewsFeedService
-from tweets.api.serializers import TweetSerializer, TweetSerializerForCreate
+from tweets.api.serializers import (
+    TweetSerializer,
+    TweetSerializerWithComments,
+    TweetSerializerForCreate,
+)
 from tweets.models import Tweet
+from utils.decorators import required_params
 
 
 class TweetViewSet(viewsets.GenericViewSet):
-    # queryset = Tweet.objects.all()
+    queryset = Tweet.objects.all()
     serializer_class = TweetSerializerForCreate
 
     def get_permissions(self):
-        if self.action == 'list':
+        if self.action in ['list', 'retrieve']:
             return [AllowAny()]     # (): 实例化
         return [IsAuthenticated()]  # (): 实例化
 
+    @required_params(request_attr='query_params', params=['user_id'])
     def list(self, request):    # GET /api/tweets/?user_id=1
-        if 'user_id' not in request.query_params:
-            return Response(data={'Missing user_id'}, status=400)
         user_id = request.query_params.get('user_id')
         # 这句查询会被翻译为
         # select * from twitter_tweets
@@ -34,7 +38,16 @@ class TweetViewSet(viewsets.GenericViewSet):
         serializer = TweetSerializer(instance=tweets, many=True)
         # 一般来说 json 格式的 response 默认都要用 hash 的格式
         # 而不能用 list 的格式（约定俗成）
-        return Response(data={'tweets': serializer.data}, status=200)
+        return Response(data={'tweets': serializer.data}, status=status.HTTP_200_OK)
+
+    def retrieve(self, request, *args, **kwargs):
+        # TODO: 通过某个 query 参数 with_all_comments     来决定是否需要带上所有 comments
+        # TODO: 通过某个 query 参数 with_preview_comments 来决定是否需要带上前三条 comments
+        tweet = self.get_object()
+        return Response(
+            data=TweetSerializerWithComments(instance=tweet).data,
+            status=status.HTTP_200_OK,
+        )
 
     def create(self, request):
         # 重载 create 方法，因为需要默认用当前登录用户作为 tweet.user
@@ -51,4 +64,7 @@ class TweetViewSet(viewsets.GenericViewSet):
             }, status=400)
         tweet = serializer.save()   # save will call TweetSerializerForCreate.create()
         NewsFeedService.fanout_to_followers(tweet=tweet)
-        return Response(data=TweetSerializer(instance=tweet).data, status=201)
+        return Response(
+            data=TweetSerializer(instance=tweet).data,
+            status=status.HTTP_201_CREATED,
+        )
