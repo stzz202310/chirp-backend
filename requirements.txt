@@ -17,6 +17,8 @@ distro==1.7.0
 Django==5.2.8
 django-debug-toolbar==6.1.0
 django-filter==25.2
+django-model-utils==5.0.0
+django-notifications-hq @ git+https://github.com/django-notifications/django-notifications.git@4c44bcea2504d9a3fcd26366b232a13732a08f2a
 djangorestframework==3.16.1
 httplib2==0.20.2
 hyperlink==21.0.0
@@ -25,6 +27,7 @@ importlib-metadata==4.6.4
 incremental==21.3.0
 jeepney==0.7.1
 Jinja2==3.0.3
+jsonfield==3.2.0
 jsonpatch==1.32
 jsonpointer==2.0
 jsonschema==3.2.0
@@ -60,6 +63,7 @@ six==1.16.0
 sos==4.8.2
 sqlparse==0.5.3
 ssh-import-id==5.11
+swapper==1.4.0
 systemd-python==234
 Twisted==22.1.0
 typing_extensions==4.15.0

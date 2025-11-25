@@ -13,7 +13,8 @@ class TweetSerializer(serializers.ModelSerializer):
     comments_count = serializers.SerializerMethodField()
     likes_count = serializers.SerializerMethodField()
     has_liked = serializers.SerializerMethodField()
-    # 当前登陆用户request.user 是否赞过这个 tweet
+    # LikesService.has_liked ==> get_has_liked ==> has_liked => TweetSerializer 需要获取当前的 request.user
+    # has_liked: 当前登陆用户request.user 是否赞过这个 tweet
 
     class Meta:
         model = Tweet
@@ -32,7 +33,7 @@ class TweetSerializer(serializers.ModelSerializer):
         # self: serializer
         # obj: tweet
         return LikesService.has_liked(
-            user=self.context['request'].user,  # 需要传入 context={'request': request}
+            user=self.context['request'].user,
             target=obj,
         )
 
@@ -46,9 +47,8 @@ class TweetSerializer(serializers.ModelSerializer):
 class TweetSerializerForDetail(TweetSerializer):
     # TweetSerializer: 精简版
     # TweetSerializerForDetail: 详细版 with Comments and Likes
-    # TweetSerializerForDetail: 继承自 TweetSerializer，也需要传入 context={'request': request}
-    comments = CommentSerializer(source='comment_set', many=True)
-    # queryset = tweet.comment_set
+    # TweetSerializerForDetail: 继承自 TweetSerializer，也需要获取当前的 request.user
+    comments = CommentSerializer(source='comment_set', many=True)   # queryset = tweet.comment_set
     likes = LikeSerializer(source='like_set', many=True)
 
     class Meta:

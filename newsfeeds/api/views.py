@@ -20,7 +20,10 @@ class NewsFeedViewSet(viewsets.GenericViewSet):
         serializer = NewsFeedSerializer(
             instance=self.get_queryset(),
             many=True,
-            context={'request': request},   # 可以向下传递到 tweet = TweetSerializer()
+            context={'request': request},
+            # 可以向下传递到
+            # class NewsFeedSerializer(...):
+            #   tweet = TweetSerializer()
         )
         return Response(data={
             'newsfeeds': serializer.data,

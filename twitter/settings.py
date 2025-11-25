@@ -48,10 +48,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # third party
+    # third party packages
     'rest_framework',
     "debug_toolbar",
     'django_filters',
+    'notifications',
 
     # project apps
     'accounts',
@@ -60,6 +61,7 @@ INSTALLED_APPS = [
     'newsfeeds',
     'comments',
     'likes',
+    'inbox',  # [不能叫 notifications，防止冲突] [单数: 每个用户只有一个inbox]
 ]
 
 REST_FRAMEWORK = {
