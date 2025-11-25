@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from newsfeeds.services import NewsFeedService
 from tweets.api.serializers import (
     TweetSerializer,
-    TweetSerializerWithComments,
+    TweetSerializerForDetail,
     TweetSerializerForCreate,
 )
 from tweets.models import Tweet
@@ -35,7 +35,11 @@ class TweetViewSet(viewsets.GenericViewSet):
         # many = True, return list of dict
         # 1. if tweets 是一个 QuerySet
         # 2. if tweets 是一个模型对象列表 (如[tweet1, tweet2, tweet3])
-        serializer = TweetSerializer(instance=tweets, many=True)
+        serializer = TweetSerializer(
+            instance=tweets,
+            many=True,
+            context={'request': request},
+        )
         # 一般来说 json 格式的 response 默认都要用 hash 的格式
         # 而不能用 list 的格式（约定俗成）
         return Response(data={'tweets': serializer.data}, status=status.HTTP_200_OK)
@@ -44,10 +48,11 @@ class TweetViewSet(viewsets.GenericViewSet):
         # TODO: 通过某个 query 参数 with_all_comments     来决定是否需要带上所有 comments
         # TODO: 通过某个 query 参数 with_preview_comments 来决定是否需要带上前三条 comments
         tweet = self.get_object()
-        return Response(
-            data=TweetSerializerWithComments(instance=tweet).data,
-            status=status.HTTP_200_OK,
+        serializer = TweetSerializerForDetail(
+            instance=tweet,
+            context={'request': request},
         )
+        return Response(data=serializer.data, status=status.HTTP_200_OK)
 
     def create(self, request):
         # 重载 create 方法，因为需要默认用当前登录用户作为 tweet.user
@@ -61,10 +66,10 @@ class TweetViewSet(viewsets.GenericViewSet):
                 "success": False,
                 "message": "Please check input.",
                 "errors": serializer.errors,
-            }, status=400)
+            }, status=status.HTTP_400_BAD_REQUEST)
         tweet = serializer.save()   # save will call TweetSerializerForCreate.create()
         NewsFeedService.fanout_to_followers(tweet=tweet)
         return Response(
-            data=TweetSerializer(instance=tweet).data,
+            data=TweetSerializer(instance=tweet, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
