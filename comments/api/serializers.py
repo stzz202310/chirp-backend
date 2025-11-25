@@ -9,8 +9,7 @@ from tweets.models import Tweet
 
 class CommentSerializer(serializers.ModelSerializer):
     user = UserSerializerForComment()
-    has_liked = serializers.SerializerMethodField()
-    # 当前登陆用户request.user 是否赞过这个 comment
+    has_liked = serializers.SerializerMethodField() # 当前登陆用户request.user 是否赞过这个 comment
     likes_count = serializers.SerializerMethodField()
     # TODO: CommentSerializerForDetail
     # likes = LikeSerializer(source='like_set', many=True)

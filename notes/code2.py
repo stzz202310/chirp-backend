@@ -106,5 +106,11 @@ from_user_id    数据库列               接收用户 ID（整数）
 (4) 如果有问题 再次修改 ← 重复1-3
 (5) migrate          ← 应用到正式数据库
 
+jazzband/django-push-notifications
+Send push notifications to mobile devices through GCM or APNS in Django.
+
+django-notifications/django-notifications
+GitHub notifications alike app for Django
+
 
 """
