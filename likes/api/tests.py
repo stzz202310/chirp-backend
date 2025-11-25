@@ -4,6 +4,10 @@ from testing.testcases import TestCase
 
 LIKE_BASE_URL = '/api/likes/'
 LIKE_CANCEL_URL = '/api/likes/cancel/'
+COMMENT_LIST_API = '/api/comments/'
+TWEET_LIST_API = '/api/tweets/'
+TWEET_DETAIL_API = '/api/tweets/{}/'
+NEWSFEED_LIST_API = '/api/newsfeeds/'
 
 
 class LikeApiTests(TestCase):
@@ -152,3 +156,72 @@ class LikeApiTests(TestCase):
         self.assertEqual(response.data['deleted'], True)
         self.assertEqual(tweet.like_set.count(), 0)
         self.assertEqual(comment.like_set.count(), 0)
+
+    def test_likes_in_comments_api(self):
+        tweet = self.create_tweet(self.taotao)
+        comment = self.create_comment(self.taotao, tweet)
+
+        # 1. test anonymous
+        data = {'tweet_id': tweet.id}
+        response = self.anonymous_client.get(COMMENT_LIST_API, data=data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['comments'][0]['has_liked'], False)
+        self.assertEqual(response.data['comments'][0]['likes_count'], 0)
+
+        # 2. test COMMENT_LIST_API
+        data = {'tweet_id': tweet.id}
+        response = self.zhuzhu_client.get(COMMENT_LIST_API, data=data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['comments'][0]['has_liked'], False)
+        self.assertEqual(response.data['comments'][0]['likes_count'], 0)
+        self.create_like(user=self.zhuzhu, target=comment)
+        response = self.zhuzhu_client.get(COMMENT_LIST_API, data=data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['comments'][0]['has_liked'], True)
+        self.assertEqual(response.data['comments'][0]['likes_count'], 1)
+
+        # 3. test TWEET_DETAIL_API
+        self.create_like(user=self.taotao, target=comment)
+        url = TWEET_DETAIL_API.format(tweet.id)
+        response = self.zhuzhu_client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['comments'][0]['has_liked'], True)
+        self.assertEqual(response.data['comments'][0]['likes_count'], 2)
+
+    def test_likes_in_tweets_api(self):
+        tweet = self.create_tweet(self.taotao)
+
+        # 1. test TWEET_DETAIL_API
+        url = TWEET_DETAIL_API.format(tweet.id)
+        response = self.zhuzhu_client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['has_liked'], False)
+        self.assertEqual(response.data['likes_count'], 0)
+        self.create_like(user=self.zhuzhu, target=tweet)
+        response = self.zhuzhu_client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['has_liked'], True)
+        self.assertEqual(response.data['likes_count'], 1)
+
+        # 2. test TWEET_LIST_API
+        data = {'user_id': self.taotao.id}
+        response = self.zhuzhu_client.get(TWEET_LIST_API, data=data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['tweets'][0]['has_liked'], True)
+        self.assertEqual(response.data['tweets'][0]['likes_count'], 1)
+
+        # 3. test NEWSFEED_LIST_API
+        self.create_like(user=self.taotao, target=tweet)
+        self.create_newsfeed(self.zhuzhu, tweet)
+        response = self.zhuzhu_client.get(NEWSFEED_LIST_API)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['newsfeeds'][0]['tweet']['has_liked'], True)
+        self.assertEqual(response.data['newsfeeds'][0]['tweet']['likes_count'], 2)
+
+        # 4. test likes details via TWEET_DETAIL_API
+        url = TWEET_DETAIL_API.format(tweet.id)
+        response = self.zhuzhu_client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['likes']), 2)
+        self.assertEqual(response.data['likes'][0]['user']['id'], self.taotao.id)
+        self.assertEqual(response.data['likes'][1]['user']['id'], self.zhuzhu.id)

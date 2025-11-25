@@ -19,6 +19,10 @@ class UserSerializerForComment(UserSerializerForTweet):
     pass
 
 
+class UserSerializerForLike(UserSerializerForTweet):
+    pass
+
+
 class UserSerializerForFriendship(UserSerializerForTweet):
     pass
 

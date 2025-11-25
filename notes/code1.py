@@ -62,8 +62,8 @@ request.user.is_authenticated = True
 
 ================================================================================================================
 
-django_login(request, user)
 django_logout(request)
+
 user = django_authenticate([request], username=username, password=password)
 if not user or user.is_anonymous:
 1. 接收 request（可选）和用户名/密码

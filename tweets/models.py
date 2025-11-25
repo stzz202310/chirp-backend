@@ -34,7 +34,7 @@ class Tweet(models.Model):
     #     return Comment.objects.filter(tweet=self)
 
     @property
-    def like_set(self):
+    def like_set(self): # 并不是数据库表中的真实字段
         return Like.objects.filter(
             content_type=ContentType.objects.get_for_model(Tweet),
             object_id=self.id,
