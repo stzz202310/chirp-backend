@@ -1,7 +1,6 @@
-from testing.testcases import TestCase
-from rest_framework.test import APIClient   # 用于在测试中发送 API 请求
-from django.contrib.auth.models import User
+from rest_framework.test import APIClient  # 用于在测试中发送 API 请求
 
+from testing.testcases import TestCase
 
 LOGIN_URL = '/api/accounts/login/'  # 注意末尾斜杠 '/' 否则 自动重定向，status_code = 301
 LOGOUT_URL = '/api/accounts/logout/'

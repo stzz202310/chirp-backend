@@ -146,6 +146,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# AUTH_USER_MODEL = 'django.contrib.auth.models.User'   django User 模型
+# AUTH_USER_MODEL = 'users.models.User'                 自定义  User 模型
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
