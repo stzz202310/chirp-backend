@@ -2,19 +2,25 @@ from django.db import models
 from django.contrib import admin
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.urls import include, path
+from django.utils import timezone
 
-from rest_framework import exceptions
 from rest_framework import routers
 from rest_framework import serializers
 from rest_framework import status
 from rest_framework import viewsets
 
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.test import APIClient
+
+from notifications.models import Notification
+from notifications.signals import notify
 
 """
 | Serializer 类型     | 是否必须写 `Meta.model` | 特点 / 原因                           |
