@@ -6,6 +6,7 @@ from testing.testcases import TestCase
 COMMENT_URL = '/api/comments/'
 LIKE_URL = '/api/likes/'
 NOTIFICATION_URL = '/api/notifications/'
+NOTIFICATION_DETAIL_URL = '/api/notifications/{}/'
 
 
 class NotificationTests(TestCase):
@@ -112,3 +113,52 @@ class NotificationApiTests(TestCase):
         self.assertEqual(response.data['count'], 1)
         response = self.taotao_client.get(NOTIFICATION_URL, data={'unread': True})
         self.assertEqual(response.data['count'], 1)
+
+    def test_update(self):
+        comment = self.create_comment(user=self.taotao, tweet=self.taotao_tweet)
+        self.zhuzhu_client.post(LIKE_URL, data={
+            'content_type': 'tweet',
+            'object_id': self.taotao_tweet.id,
+        })
+        self.zhuzhu_client.post(LIKE_URL, data={
+            'content_type': 'comment',
+            'object_id': comment.id,
+        })
+        notification = self.taotao.notifications.first()
+        url = NOTIFICATION_DETAIL_URL.format(notification.id)
+
+        # 1. post 不行，需要用 put
+        response = self.taotao_client.post(path=url, data={'unread': False})
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+        # 2. 不可以被匿名用户改变 notification 状态
+        response = self.anonymous_client.put(path=url, data={'unread': False})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 3. 不可以被其他用户改变 notification 状态
+        # 因为 get_queryset 是 filter(recipient=self.request.user 当前用户)
+        # 如果 本条通知 不属于 当前用户，会返回 404 而不是 403
+        response = self.zhuzhu_client.put(path=url, data={'unread': False})
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+        # 4. 成功标记为已读
+        response = self.taotao_client.put(path=url, data={'unread': False})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        unread_url = '/api/notifications/unread-count/'
+        response = self.taotao_client.get(path=unread_url)
+        self.assertEqual(response.data['unread_count'], 1)
+
+        # 5. 再标记为未读
+        response = self.taotao_client.put(path=url, data={'unread': True})
+        response = self.taotao_client.get(path=unread_url)
+        self.assertEqual(response.data['unread_count'], 2)
+
+        # 6. 必须带 unread
+        response = self.taotao_client.put(path=url, data={'verb': 'newverb'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 7. 不可修改其他的信息
+        response = self.taotao_client.put(path=url, data={'verb': 'newverb', 'unread': False})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        notification.refresh_from_db()
+        self.assertNotEqual(notification.verb, 'newverb')
