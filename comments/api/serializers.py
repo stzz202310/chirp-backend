@@ -9,9 +9,9 @@ from tweets.models import Tweet
 
 class CommentSerializer(serializers.ModelSerializer):
     user = UserSerializerForComment()
-    has_liked = serializers.SerializerMethodField() # 当前登陆用户request.user 是否赞过这个 comment
+    # has_liked: 当前登陆用户request.user 是否赞过这个 comment
+    has_liked = serializers.SerializerMethodField()
     likes_count = serializers.SerializerMethodField()
-    # TODO: CommentSerializerForDetail
     # likes = LikeSerializer(source='like_set', many=True)
 
     class Meta:
@@ -52,6 +52,8 @@ class CommentSerializerForCreate(serializers.ModelSerializer):
         tweet_id = attrs.get('tweet_id')
         if not Tweet.objects.filter(id=tweet_id).exists():
             raise ValidationError({'message': 'Tweet does not exist.'})
+        # 'user_id': request.user.id, 所以不用再检查
+
         # 必须 return validated data
         # 也就是验证过之后，进行过处理的输入数据 [当然，也可以是不做处理的数据]
         return attrs

@@ -1,19 +1,21 @@
-from django.contrib.auth.models import User
-from rest_framework import permissions
-from rest_framework import viewsets
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from django.contrib.auth import (
     login as django_login,
     logout as django_logout,
     authenticate as django_authenticate,
 )
+from django.contrib.auth.models import User
+from rest_framework import permissions
+from rest_framework import status
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from accounts.api.serializers import (
     UserSerializer,
     LoginSerializer,
     SignupSerializer,
 )
+
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all()       # ModelViewSet 必需
@@ -52,25 +54,23 @@ class AccountViewSet(viewsets.ViewSet):
     | `@action(detail=False, url_path="login-status")` | `/api/accounts/login-status/` | `accounts-login-status` |
 
     
-    detail=True   单个对象    /api/accounts/{pk}/login_status/
-    detail=False  列表       /api/accounts/login_status/
-    request 代表“当前发起这次请求的用户”; 对作用于当前会话的动作 detail=False
+    detail=True   单个对象    /api/accounts/{pk}/login_status/  def login_status(self, request, pk):
+    detail=False  列表       /api/accounts/login_status/       def login_status(self, request):
+    request 代表“当前发起这次请求的用户”;
     """
-    @action(methods=['GET'], detail=False)
+    @action(methods=['GET'], detail=False)  # 作用于当前会话的动作: detail=False
     def login_status(self, request):
-    # @action(methods=['GET'], detail=True)
-    # def login_status(self, request, pk):
         data = {
             'has_logged_in': request.user.is_authenticated,
             'ip': request.META.get('REMOTE_ADDR'),
         }
         if request.user.is_authenticated:
-            data['user'] = UserSerializer(request.user).data
+            data['user'] = UserSerializer(instance=request.user).data
         return Response(data=data)
 
     @action(methods=['POST'], detail=False)
     def logout(self, request):
-        django_logout(request)
+        django_logout(request=request)
         return Response(data={'success': True})
 
     @action(methods=['POST'], detail=False)
@@ -81,7 +81,7 @@ class AccountViewSet(viewsets.ViewSet):
                 "success": False,
                 "message": "Please check input.",
                 "errors": serializer.errors,
-            }, status=400)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         username = serializer.validated_data.get('username')
         password = serializer.validated_data.get('password')
@@ -99,13 +99,13 @@ class AccountViewSet(viewsets.ViewSet):
             return Response(data={
                 "success": False,
                 "message": "Username and password does not match.",
-            }, status=400)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-        django_login(request, user)
+        django_login(request=request, user=user)
         return Response(data={
             "success": True,
             "user": UserSerializer(instance=user).data,
-        })
+        }, status=status.HTTP_200_OK)
 
     @action(methods=['POST'], detail=False)
     def signup(self, request):
@@ -115,11 +115,11 @@ class AccountViewSet(viewsets.ViewSet):
                 "success": False,
                 "message": "Please check input.",
                 "errors": serializer.errors,
-            }, status=400)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         user = serializer.save()
-        django_login(request, user)
+        django_login(request=request, user=user)
         return Response(data={
             'success': True,
             'user': UserSerializer(instance=user).data,
-        }, status=201)
+        }, status=status.HTTP_201_CREATED)

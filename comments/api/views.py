@@ -19,7 +19,8 @@ class CommentViewSet(viewsets.GenericViewSet):
     不实现 retrieve (查询单个 comment) 的方法，因为没有这个需求
     """
     # DRF界面: 基于 {serializer_class} 展示|渲染 表单
-    # queryset: self.get_object()
+    # queryset:     def get_object(self)      OR queryset = XXX
+    # permissions:  def get_permissions(self) OR permission_classes = (XXX,)
     serializer_class = CommentSerializerForCreate
     queryset = Comment.objects.all()
     filterset_fields = ('tweet_id',)
@@ -29,25 +30,26 @@ class CommentViewSet(viewsets.GenericViewSet):
     # 不能写成 AllowAny 或 IsAuthenticated（那只是类名，而不是权限实例）
         if self.action == 'create':
             return [IsAuthenticated()]
-        if self.action in ['update', 'destroy',]:
-            # 先检查 是否登陆，再检查 request.user == comment的owner
+        if self.action in ('update', 'destroy',):
+            # 1. 检查 是否登陆
+            # 2. 检查 IsObjectOwner() 是否有更新|删除的权限
             return [IsAuthenticated(), IsObjectOwner()]
         return [AllowAny()]
 
     @required_params(method='GET', params=['tweet_id'])
+    # 检测是否有 tweet_id, 否则会返回所有的评论
+    # TODO [HARD]: 有权限看tweet的用户,才有权限看这个tweet的评论
     def list(self, request, *args, **kwargs):
         # tweet_id = request.query_params.get('tweet_id')
         # comments = Comment.objects.filter(tweet_id=tweet_id)
         queryset = self.get_queryset()
-        # select_related [join]; null [n + 1 queries]
+        # user = UserSerializerForComment() 展示 users [many=True] 的详细信息
+        # 1. queryset.select_related [join]
+        # 2. queryset.user [n + 1 queries]
         comments = self.filter_queryset(queryset=queryset)\
             .prefetch_related('user')\
             .order_by('created_at')
-        # 1. 检查视图中是否配置 filter_backends
-        # 2. 依次调用每个 filter backend 的 filter_queryset 方法 [DjangoFilterBackend]
-        #    DjangoFilterBackend: 它会根据 filterset_fields 去过滤 queryset
-        #    DRF 会根据 request.query_params 自动生成过滤条件
-        # 3. 返回经过所有过滤器处理后的 queryset
+
         serializer = CommentSerializer(
             instance=comments,
             many=True,
@@ -75,31 +77,39 @@ class CommentViewSet(viewsets.GenericViewSet):
 
         comment = serializer.save()
         NotificationService.send_comment_notification(comment=comment)
-        return Response(data=CommentSerializer(
+        serializer = CommentSerializer(
             instance=comment,
             context={'request': request},
-        ).data, status=status.HTTP_201_CREATED)
+        )
+        return Response(
+            data=serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
 
     def update(self, request, *args, **kwargs):
         # get_object 是 DRF 包装的一个函数，会在找不到的时候 raise 404 error
         # 所以这里不需要做额外的判断
         comment = self.get_object()
         serializer = CommentSerializerForUpdate(
-            instance=comment, # self.get_object()
+            instance=comment,
             data=request.data,
-        )   # 不同的需求，用不同的 Serializer —— 更安全、隔离、解耦
+        )
 
         if not serializer.is_valid():
-            return Response(data={
-                'message': 'Please check input.',
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                data={'message': 'Please check input.',},
+                status=status.HTTP_400_BAD_REQUEST)
         # save() 方法会触发 serializer 中的 update 方法，点进 save 的具体实现里可以看到
         # save() 会根据是否传入 instance 来决定执行 create() 还是 update()
         comment = serializer.save()
-        return Response(data=CommentSerializer(
+        serializer = CommentSerializer(
             instance=comment,
             context={'request': request},
-        ).data, status=status.HTTP_200_OK)
+        )
+        return Response(
+            data=serializer.data,
+            status=status.HTTP_200_OK,
+        )
 
     def destroy(self, request, *args, **kwargs):
         comment = self.get_object()

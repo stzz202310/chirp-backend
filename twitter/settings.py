@@ -60,17 +60,18 @@ INSTALLED_APPS = [
     'friendships',
     'newsfeeds',
     'comments',
-    'likes',
+    'likes',  # 完整的用户行为闭环[读:看到Tweet + 写:点赞]，企业用来做监控[如果点赞数量突然大幅下降，可能是系统链路出问题了]
     'inbox',  # [不能叫 notifications，防止冲突] [单数: 每个用户只有一个inbox]
 ]
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,
+    'PAGE_SIZE': 10,    # Page: count, next, previous, results
     # client 客户端传入这个参数
     # web client        page_size = 20 to 50
     # phone app client  page_seize = 10
-    # pad app client, 嵌入式 client ...
+    # pad app client,
+    # 嵌入式 client ...
 
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
@@ -89,7 +90,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
-    "debug_toolbar.middleware.DebugToolbarMiddleware",  #
+    "debug_toolbar.middleware.DebugToolbarMiddleware",
 ]
 
 ROOT_URLCONF = 'twitter.urls'

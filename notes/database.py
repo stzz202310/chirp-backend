@@ -24,7 +24,7 @@ print(qs.query)
 2. 不要用 CASCADE 
     删除一个用户 -> 删除这个用户发的帖子 -> 删除帖子的赞和评论 -> 删除评论的赞 ...
 
-3. DROP FOREIGN KEY CONSTRAINT [TODO]
+3. DROP FOREIGN KEY CONSTRAINT {TODO [HARD]}
 
 4. N + 1 Queries: 1个 API request 对应 常数级别的 DB queries [10次]
     例子: newsfeeds.services｜friendships.services | comments.api.views
@@ -35,5 +35,61 @@ print(qs.query)
     假设 通讯时间 10ms，SQL操作时间 1ms
     通讯十次 每次插入一条[错误] = (10 + 1) * 10 = 110 ms
     通讯一次 每次插入十条[正确] = 10 + 1 * 10 = 20 ms
+
+5. queryset.filter().fiter() 有多个筛选条件时，一定要检查是否有 联合索引 ⚠️
+
+==========================================================================================
+
+劝和不劝分: 能不能仅用参数区分 like comment / like tweet
+劝分不劝和: 一个 app 可以有多个 Models
+    1. 方便拆分到不同的机器|不同类型的数据库中: 各个表单的读写频率不同
+        User:           登陆,注册[频率低]
+        UserProfile:    个人信息展示[频率高]
+        PushPreference: 推送的时候[频率高]
+    
+    2. 数据库访问频率低: 使用MySQL单表即可
+       数据库访问频率高: 水平拆分(sharding) 或 分布式存储(HBase|MongoDB), 相当于多个人一起工作 分摊访问压力
+       单条数据访问频率极高: 复制 N 份，让流量打到不同的机器
+
+class User(models.Model):
+class UserProfile(models.Model):
+class PushPreference(models.Model):
+
+    class Meta: 配置信息
+        db_table = 'app_model'  default
+        db_table = 'XXX'        自定义
+
+==========================================================================================
+
+like_set, has_liked, likes_count
+方法 1: models.py
+    @property
+    def like_set(self): 
+
+方法 2: api.serializers.py [通过计算得到, 仅 Like Model 的信息不够, 所以不放在 models.py]
+    comments = serializers.SerializerMethodField()
+    def get_comments(self, obj):
+        self: serializer
+        obj: tweet
+        return CommentSerializer(obj.comment_set.all(), many=True).data
+        # comments = CommentSerializer(...):  DRF 帮你自动调用了 .data           [不需要手动 .data]
+        # return CommentSerializer(...).data: 你控制序列化过程，必须手动返回序列化结果 [需要手动 .data]
+
+方法 3: related_name(models.py) + source(api.serializers.py)
+    Friendship 的多个 ForeignKey 都指向 User
+    from_user = models.ForeignKey(User, related_name='following_friendship_set',)
+    to_user = models.ForeignKey(User, related_name='follower_friendship_set',)
+
+    class FollowerSerializer(serializers.ModelSerializer):      # 粉丝列表
+        user = UserSerializerForFriendship(source='from_user')
+    class FollowingSerializer(serializers.ModelSerializer):
+        user = UserSerializerForFriendship(source='to_user')
+
+    class TweetSerializerForDetail(TweetSerializer):
+        comments = CommentSerializer(source='comment_set', many=True)   # queryset = tweet.comment_set
+        likes = LikeSerializer(source='like_set', many=True)
+
+    publisher = UserSerializer()              自动去找 tweet.publisher
+    publisher = UserSerializer(source='user') 自动去找 tweet.user; 必须在 meta.fields 中也定义publisher
 
 """

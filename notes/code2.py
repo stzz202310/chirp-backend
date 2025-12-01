@@ -73,7 +73,7 @@ from_user       模型字段名|外键字段      接收 User 对象
 from_user_id    数据库列               接收用户 ID（整数）
 
 ⚠️ 对象 → 用 from_user
-⚠️ ID  → 用 from_user_id
+⚠️ ID  → 用 from_user_id, 尽量用 id, 减少 query 的次数
 
 ⚠️ 模型索引/约束（index_together, UniqueConstraint）必须写 from_user（模型字段名）
 
@@ -106,11 +106,45 @@ from_user_id    数据库列               接收用户 ID（整数）
 (4) 如果有问题 再次修改 ← 重复1-3
 (5) migrate          ← 应用到正式数据库
 
+================================================================================================================
+
 jazzband/django-push-notifications
 Send push notifications to mobile devices through GCM or APNS in Django.
 
 django-notifications/django-notifications
 GitHub notifications alike app for Django
+
+================================================================================================================
+
+class CommentViewSet(viewsets.GenericViewSet):
+    filterset_fields = ('tweet_id',)
+    
+    def list(self, request, *args, **kwargs):
+        queryset = Comment.objects.all()
+        queryset = self.get_queryset()
+        
+        comments = self.filter_queryset(queryset=queryset)
+        comments = queryset.filter(tweet_id=request.query_params.get('tweet_id'))
+        
+        1. REST_FRAMEWORK = {'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend',],}
+        2. DjangoFilterBackend 会根据 filterset_fields 去过滤 queryset
+        3. DRF 会根据 request.query_params 自动生成过滤条件
+        
+        有多个筛选项时，会很方便
+        filterset_fields = ('a', 'b', 'c',...)
+        queryset = self.get_queryset()
+        queryset = self.filter_query(queryset=queryset)
+        
+        OR
+        
+        if 'a' in request.query_params:
+	        queryset = queryset.filter(a = request.query_params.get('a'))
+        if 'b' in request.query_params:
+	        queryset = queryset.filter(b = request.query_params.get('b'))
+        ......
+        
+================================================================================================================   
+
 
 
 """

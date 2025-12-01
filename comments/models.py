@@ -18,7 +18,7 @@ class Comment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # 有在某个 Tweet 下排序所有 comments 的需求
+        # 需求: 在某个 Tweet 下排序所有 comments [comment.like_set]
         # index_together = (('tweet', 'created_at'),)
         indexes = [
             models.Index(fields=('tweet', 'created_at'),),

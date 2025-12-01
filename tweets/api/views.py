@@ -45,8 +45,8 @@ class TweetViewSet(viewsets.GenericViewSet):
         return Response(data={'tweets': serializer.data}, status=status.HTTP_200_OK)
 
     def retrieve(self, request, *args, **kwargs):
-        # TODO: 通过某个 query 参数 with_all_comments     来决定是否需要带上所有 comments
-        # TODO: 通过某个 query 参数 with_preview_comments 来决定是否需要带上前三条 comments
+        # TODO [EASY]: 通过某个 query 参数 with_all_comments     来决定是否需要带上所有 comments
+        # TODO [EASY]: 通过某个 query 参数 with_preview_comments 来决定是否需要带上前三条 comments
         tweet = self.get_object()
         serializer = TweetSerializerForDetail(
             instance=tweet,
