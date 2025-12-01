@@ -64,3 +64,18 @@ class NotificationSerializer(serializers.ModelSerializer):
         action_object：公告（Announcement）
         target：无或全部用户（看你实现）
         """
+
+
+class NotificationSerializerForUpdate(serializers.ModelSerializer):
+    # BooleanField 会自动兼容 true|false, 'true'|'false', 'True'|'False', '1'|'0'
+    # 等情况，并都转换为 python 的 boolean 类型 True|False
+    unread = serializers.BooleanField()
+
+    class Meta:
+        model = Notification
+        fields = ('unread',)    # 只有 unread 可以被更新
+
+    def update(self, instance, validated_data):
+        instance.unread = validated_data.get('unread')
+        instance.save()
+        return instance

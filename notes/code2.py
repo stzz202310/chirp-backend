@@ -123,17 +123,17 @@ class CommentViewSet(viewsets.GenericViewSet):
         queryset = Comment.objects.all()
         queryset = self.get_queryset()
         
+        # comments = queryset.filter(tweet_id=request.query_params.get('tweet_id'))
         comments = self.filter_queryset(queryset=queryset)
-        comments = queryset.filter(tweet_id=request.query_params.get('tweet_id'))
         
         1. REST_FRAMEWORK = {'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend',],}
         2. DjangoFilterBackend 会根据 filterset_fields 去过滤 queryset
-        3. DRF 会根据 request.query_params 自动生成过滤条件
+        3. DRF 会根据 ✅request.query_params [❌request.data] 自动生成过滤条件
         
         有多个筛选项时，会很方便
         filterset_fields = ('a', 'b', 'c',...)
         queryset = self.get_queryset()
-        queryset = self.filter_query(queryset=queryset)
+        queryset = self.filter_queryset(queryset=queryset)
         
         OR
         

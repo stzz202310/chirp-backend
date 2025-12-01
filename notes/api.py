@@ -7,7 +7,7 @@ GET     /api/XXXs/      list        [read: request.query_params]
 GET     /api/XXXs/1/    retrieve    [read: request.query_params]
 DELETE  /api/XXXs/1/    destroy
 PATCH   /api/XXXs/1/    partial_update
-PUT     /api/XXXs/1/    update      ⚠️ [api.tests: comment.refresh_from_db()]
+PUT     /api/XXXs/1/    update      ⚠️ [api.tests: comment.refresh_from_db()][定义可以被更新的 field]
 
 list    /api/comments/      所有comments
 detail  /api/comments/1/    {comment_id=1}的comment = self.get_object()
@@ -89,9 +89,10 @@ GET /api/friendships/1/?action=followers    查询某个用户的粉丝列表
 GET /api/friendships/1/?action=followings   查询某个用户的关注列表
 ============================================================================================
 
-GET /api/notifications/                     当前用户request.user 的通知    viewsets.mixins.ListModelMixin
-GET /api/notifications/unread-count/        当前用户request.user unread-count
+GET  /api/notifications/                    当前用户request.user 的通知    viewsets.mixins.ListModelMixin
+GET  /api/notifications/unread-count/       当前用户request.user unread-count
 POST /api/notifications/mark-all-as-read/   当前用户request.user mark-all-as-read
+PUT  /api/notifications/11/                 update params=['unread',], 标记一个 notification 为已读或者未读
 
 POST    /api/likes/         create     params=['content_type', 'object_id',] 点赞
 POST    /api/likes/cancel/  cancel ✅  params=['content_type', 'object_id',] 取消赞
