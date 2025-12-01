@@ -3,7 +3,6 @@ from rest_framework.test import APIClient
 
 from testing.testcases import TestCase
 
-
 NEWSFEEDS_URL = '/api/newsfeeds/'
 POST_TWEETS_URL = '/api/tweets/'
 FOLLOW_URL = '/api/friendships/{}/follow/'
@@ -38,9 +37,10 @@ class NewsFeedApiTests(TestCase):
         self.assertEqual(len(response.data['newsfeeds']), 1)
         # 5. 关注之后可以看到别人发的
         self.taotao_client.post(FOLLOW_URL.format(self.zhuzhu.id))
-        response = self.zhuzhu_client.post(POST_TWEETS_URL, data={
-            'content': "Hello Taotao",
-        })
+        response = self.zhuzhu_client.post(
+            path=POST_TWEETS_URL,
+            data={'content': "Hello Taotao",}
+        )
         posted_tweet_id = response.data['id']
         response = self.taotao_client.get(NEWSFEEDS_URL)
         self.assertEqual(len(response.data['newsfeeds']), 2)

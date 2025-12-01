@@ -107,8 +107,8 @@ class NotificationApiTests(TestCase):
         notification.save()
         response = self.taotao_client.get(NOTIFICATION_URL)
         self.assertEqual(response.data['count'], 2)
+        # filterset_fields=('unread',) + request.query_params
         response = self.taotao_client.get(NOTIFICATION_URL, data={'unread': False})
-        # filterset_fields=('unread',)
         self.assertEqual(response.data['count'], 1)
         response = self.taotao_client.get(NOTIFICATION_URL, data={'unread': True})
         self.assertEqual(response.data['count'], 1)

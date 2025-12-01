@@ -25,6 +25,7 @@ class NewsFeedViewSet(viewsets.GenericViewSet):
             # class NewsFeedSerializer(...):
             #   tweet = TweetSerializer()
         )
-        return Response(data={
-            'newsfeeds': serializer.data,
-        }, status=status.HTTP_200_OK)
+        return Response(
+            data={'newsfeeds': serializer.data,},
+            status=status.HTTP_200_OK
+        )

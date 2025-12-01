@@ -37,7 +37,7 @@ from notifications.signals import notify
 
 ModelViewSet：[尽量不要用] 使用简单，但容易不小心暴露不必要的接口 (自动暴露所有 CRUD)
 GenericViewSet：需要手动实现，但更安全、更灵活，推荐在涉及用户账户或敏感数据的接口使用 [白名单: 需要什么加什么]
-关联模型: 通过`queryset`[def get_queryset(self):...] 和`serializer_class`
+关联模型: 通过`queryset`[def get_queryset(self):] 和`serializer_class`[def get_permissions(self):]
 
 | 特性          | `ModelViewSet`                               | `GenericViewSet`                 |
 | ------------ | -------------------------------------------- | -------------------------------- |
@@ -61,22 +61,22 @@ request.user = AnonymousUser
 request.data = 客户端发送的用户名和密码（未校验）
 request.user.is_authenticated = False
 
-调用 django_authenticate {检查用户名密码是否正确} + login {将 user 信息写入 request.session} 后:
+调用 django_authenticate {检查用户名密码是否正确} + django_login {将 user 信息写入 request.session} 后:
 request.user = 已登录的 User 对象
 request.session 中保存了登录状态
 request.user.is_authenticated = True
 
-================================================================================================================
+=======================================================================================
 
 django_logout(request)
 
 user = django_authenticate([request], username=username, password=password)
-if not user or user.is_anonymous:
 1. 接收 request（可选）和用户名/密码
 2. 查找数据库中的用户记录
 3. 对比用户密码（Django 存的是哈希值，进行哈希验证）
 4. 如果用户名和密码匹配 → 返回一个 user 对象
    如果不匹配 → 返回 None
+   if not user or user.is_anonymous:
 
 django_login(request, user)
 1. 从 request 获取或创建 request.session
@@ -96,20 +96,32 @@ HTTP response 头部会设置 Set-Cookie: sessionid=abc123
 
 ================================================================================================================
 
-return Response(data=data, status=status.HTTP_200_OK)
-return Response(data={'tweets': serializer.data}) ==> dict {'tweets':JSON}
+不同的需求，用不同的 Serializer —— 更安全、隔离、解耦
+GET /api/tweets/1/?format=with_comments
+GET /api/tweets/1/?format=mini
+GET /api/tweets/1/?format=full
+GET /api/tweets/1/?format=admin
 
-response = self.client.get(LOGIN_STATUS_URL)
-self.assertEqual(response.data['has_logged_in'], False)
+tweets.api.views
+def get_serializer_class(self):
+    format = self.request.get_params.get('_format') OR get('format')
+    if format == 'with_comments': return TweetSerializerWithComment
+	if format == 'mini':          return TweetSerializerMini
+	...
+	return TweetSerializer
 
-================================================================================================================
+def list():
+    serializer_class = self.get_serializer_class()
+    serializer = serializer_class(data=request.data)
+
+=======================================================================================
 
 class Serializer(serializers.ModelSerializer):
     user = UserSerializerForComment()
     user = UserSerializerForFriendship(source='from_user')          # instance = friendship.from_user
     comments = CommentSerializer(source='comment_set', many=True)   # queryset = tweet.comment_set
 
-    class Meta: model = User    fields = ('user', 'email', 'comments',)
+    class Meta: model = User    fields = ('user', 'comments',)
 
     def __init__(self, instance=None, data=empty, **kwargs):
     
@@ -141,8 +153,9 @@ class Serializer(serializers.ModelSerializer):
     serializer.validated_data
     serializer.save()       # create() or update(): return instance
     
-    serializer = TweetSerializerForCreate(data=request.data, context={'request': request},)
-    serializers.py|def create(self, validated_data): user = self.context['request'].user        OR
+    views.py        serializer = TweetSerializerForCreate(data=request.data, context={'request': request},)
+    serializers.py  def create(self, validated_data): user = self.context['request'].user
+    OR
     data = {'user_id': request.user.id,
             'tweet_id': request.data.get('tweet_id'),
             'content': request.data.get('content'),}
@@ -165,5 +178,35 @@ class Serializer(serializers.ModelSerializer):
 username = serializer.validated_data.get('username') ==> Login
 username = request.data.get('username')           # ❌原始请求数据, 未校验
 username = serializer.validated_data['username']  # ✅serializer 校验后的数据; 会抛 KeyError
+
+=======================================================================================
+
+serializer.is_valid() DRF 会依次执行 三个步骤:
+步骤 1：字段级验证 (Field-level validation)     username = serializers.CharField(min_length=6, max_length=20)
+步骤 2：自定义字段级验证方法 (Optional)  serializers.py: def validate_<fieldname>(self, data):
+步骤 3：全局验证 validate(self, data)  serializers.py: def validate(self, data): 会覆盖父类的全局 validate 方法
+
+instance.save() → SQL INSERT/UPDATE 时检查 Django model {models.py}
+1. content = models.TextField(max_length=140)
+2. unique_together
+
+=======================================================================================
+
+ModelSerializer 默认实现了 create() 和 update() 方法，大致逻辑是:
+
+def update(self, instance, validated_data):
+    for attr, value in validated_data.items():
+        setattr(instance, attr, value)
+    instance.save()
+    return instance
+
+def create(self, validated_data):
+    # 1. 模型的管理器（通常是 objects）
+    ModelClass = self.Meta.model
+
+    # 2. 使用模型的默认管理器创建实例
+    instance = ModelClass.objects.create(**validated_data)
+
+    return instance
 
 """

@@ -27,7 +27,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     def followers(self, request, pk):
         # GET /api/friendships/{pk}/followers/  GET {pk} 的粉丝列表
         friendships = Friendship.objects.filter(to_user_id=pk)
-        serializer = FollowerSerializer(friendships, many=True)
+        serializer = FollowerSerializer(instance=friendships, many=True)
         return Response(
             data={'followers': serializer.data},
             status=status.HTTP_200_OK,
@@ -36,7 +36,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     @action(methods=['GET'], detail=True, permission_classes=[AllowAny])
     def followings(self, request, pk):  # GET {pk} 的关注列表
         friendships = Friendship.objects.filter(from_user_id=pk)
-        serializer = FollowingSerializer(friendships, many=True)
+        serializer = FollowingSerializer(instance=friendships, many=True)
         return Response(
             data={'followings': serializer.data},
             status=status.HTTP_200_OK,
@@ -92,49 +92,50 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         # 只有定义了 list() 的 ViewSet 才会出现在 localhost 根目录中
         # ModelViewSet, ReadOnlyModelViewSet: 已定义 list()
         # GenericViewSet: 需要自定义 list()
-        # return Response(data={'message': 'this is friendships home page'})
+        return Response(data={'message': 'this is friendships home page'})
 
-        # [Optional]
-        # 1. GET /api/friendships/?type=following&from_user_id=1    查询某个用户的关注列表
-        # 2. GET /api/friendships/?type=follower&to_user_id=1       查询某个用户的粉丝列表
-        # 3. GET /api/friendships/?from_user_id=1&to_user_id=2      查询两个人之间是否存在关注关系
-        query_params = request.query_params
-        follow_type = query_params.get('type')
-        from_user_id = query_params.get('from_user_id')
-        to_user_id = query_params.get('to_user_id')
-
-        if follow_type == 'following' and from_user_id:
-            friendships = Friendship.objects.filter(from_user_id=from_user_id)
-            serializer = FollowingSerializer(friendships, many=True)
-            return Response(
-                data={'followings': serializer.data},
-                status=status.HTTP_200_OK,
-            )
-
-        if follow_type == 'follower' and to_user_id:
-            friendships = Friendship.objects.filter(to_user_id=to_user_id)
-            serializer = FollowerSerializer(friendships, many=True)
-            return Response(
-                data={'followers': serializer.data},
-                status=status.HTTP_200_OK,
-            )
-
-        if from_user_id and to_user_id:
-            friendship = Friendship.objects.filter(from_user_id=from_user_id, to_user_id=to_user_id)
-            from_user_username = User.objects.get(id=from_user_id).username
-            to_user_username = User.objects.get(id=to_user_id).username
-
-            if not friendship.exists():
-                return Response(
-                    data={"message": f'{from_user_username} does not follow {to_user_username}'},
-                    status = status.HTTP_200_OK,
-                )
-            return Response(
-                data={"message": f'{from_user_username} follows {to_user_username}'},
-                status=status.HTTP_200_OK,
-            )
-
-        return Response(
-            data={'error': 'Missing parameters'},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        # # [Optional]
+        # # 1. GET /api/friendships/?type=following&from_user_id=1    查询某个用户的关注列表
+        # # 2. GET /api/friendships/?type=follower&to_user_id=1       查询某个用户的粉丝列表
+        # # 3. GET /api/friendships/?from_user_id=1&to_user_id=2      查询两个人之间是否存在关注关系
+        #
+        # query_params = request.query_params
+        # follow_type = query_params.get('type')
+        # from_user_id = query_params.get('from_user_id')
+        # to_user_id = query_params.get('to_user_id')
+        #
+        # if follow_type == 'following' and from_user_id:
+        #     friendships = Friendship.objects.filter(from_user_id=from_user_id)
+        #     serializer = FollowingSerializer(instance=friendships, many=True)
+        #     return Response(
+        #         data={'followings': serializer.data},
+        #         status=status.HTTP_200_OK,
+        #     )
+        #
+        # if follow_type == 'follower' and to_user_id:
+        #     friendships = Friendship.objects.filter(to_user_id=to_user_id)
+        #     serializer = FollowerSerializer(instance=friendships, many=True)
+        #     return Response(
+        #         data={'followers': serializer.data},
+        #         status=status.HTTP_200_OK,
+        #     )
+        #
+        # if from_user_id and to_user_id:
+        #     friendship = Friendship.objects.filter(from_user_id=from_user_id, to_user_id=to_user_id)
+        #     from_user_username = User.objects.get(id=from_user_id).username
+        #     to_user_username = User.objects.get(id=to_user_id).username
+        #
+        #     if not friendship.exists():
+        #         return Response(
+        #             data={"message": f'{from_user_username} does not follow {to_user_username}'},
+        #             status = status.HTTP_200_OK,
+        #         )
+        #     return Response(
+        #         data={"message": f'{from_user_username} follows {to_user_username}'},
+        #         status=status.HTTP_200_OK,
+        #     )
+        #
+        # return Response(
+        #     data={'error': 'Missing parameters'},
+        #     status=status.HTTP_400_BAD_REQUEST,
+        # )

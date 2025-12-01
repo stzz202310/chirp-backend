@@ -32,9 +32,9 @@ class FriendshipService(object):
 
         # 正确的写法二，使用 prefetch_related，会自动执行成两条语句，用 In Query 查询
         # 实际执行的 SQL 查询和上面是一样的，一共两条 SQL Queries
-        # 1. SELECT * FROM "friendships_friendship"
-        #    WHERE friendships_friendship"."to_user_id" = <user.id>;
-        # 2. SELECT * FROM `auth_user` WHERE "auth_user"."id" IN <follower_ids>;
+        # 1. SELECT * FROM `friendships_friendship`
+        #    WHERE `friendships_friendship`.`to_user_id` = <user.id>;
+        # 2. SELECT * FROM `auth_user` WHERE `auth_user`.`id` IN <follower_ids>;
         friendships = Friendship.objects.filter(
             to_user=user,
         ).prefetch_related('from_user')

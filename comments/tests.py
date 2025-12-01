@@ -17,7 +17,8 @@ class CommentModelTest(TestCase):
         self.assertEqual(self.comment.like_set.count(), 1)
 
         # 重复点赞
-        # create_like: Like.objects.create(...) 报错，违反 unique together
+        # Like.objects.create(...)          报错，违反 unique together
+        # Like.objects.get_or_create(...)   静默处理
         self.create_like(user=self.taotao, target=self.comment)
         self.assertEqual(self.comment.like_set.count(), 1)
 

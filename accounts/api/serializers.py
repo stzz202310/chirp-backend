@@ -32,7 +32,7 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField()
 
     # 用户输入的字段格式校验在 serializer 中处理
-    # 但涉及到数据库查询（如 User.objects.filter(), 也可以放在 view 中处理
+    # 但涉及到数据库查询 如 User.objects.filter(), 也可以放在 view 中处理
     def validate(self, data):
         data['username'] = data['username'].lower()
         if not User.objects.filter(username=data.get('username')).exists():
@@ -51,12 +51,6 @@ class SignupSerializer(serializers.ModelSerializer):
         model = User
         fields = ('username', 'password', 'email',)
 
-        """
-        serializer.is_valid() DRF 会依次执行 三个步骤:
-        步骤 1：字段级验证 (Field-level validation)     username = serializers.CharField(min_length=6, max_length=20)
-        步骤 2：自定义字段级验证方法 (Optional)  serializers.py: def validate_<fieldname>(self, data):
-        步骤 3：全局验证 validate(self, data)  serializers.py: def validate(self, data): 会覆盖父类的全局 validate 方法
-        """
     def validate(self, data):
         if User.objects.filter(username=data.get('username').lower()).exists():
             raise exceptions.ValidationError({
@@ -88,6 +82,3 @@ class SignupSerializer(serializers.ModelSerializer):
             password=password,
         )
         return user
-
-
-

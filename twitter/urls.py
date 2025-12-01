@@ -47,7 +47,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     # 把router 动生成的所有URL加入到 Django的总路由中; 这行代码等价于手动写出一堆 path (list, detail)
     path('', include(router.urls)),
-    # 添加DRF提供的一个'登录/注销'界面 仅浏览器页面用到; 'api-auth/login/' 'api-auth/logout'
+    # 添加DRF提供的一个'登录/注销'界面 仅浏览器页面用到; 'api-auth/login/' 'api-auth/logout/'
     # 这样当你访问 /users/ 时, 页面右上角会出现 Login按钮
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
 ] + debug_toolbar_urls()
