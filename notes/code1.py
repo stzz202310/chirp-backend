@@ -23,6 +23,8 @@ from notifications.models import Notification
 from notifications.signals import notify
 
 """
+Model / ViewSet / Serializer: 尽量少继承，提升代码的可读性
+
 | Serializer 类型     | 是否必须写 `Meta.model` | 特点 / 原因                           |
 | ----------------- | ---------------------- | -------------------------------------|
 | `ModelSerializer` | ✅ 必须写               | 绑定 Model，自动生成字段和校验，
@@ -208,5 +210,45 @@ def create(self, validated_data):
     instance = ModelClass.objects.create(**validated_data)
 
     return instance
+
+================================================================================================================
+
+------------------------- models.py ------------------------
+@property
+def XXX(self):
+def like_set(self):
+
+def __str__(self):
+------------------------------------------------------------
+
+
+------------------------ api.views -------------------------
+def get_permissions(self):
+def get_queryset(self):
+
+def list(self, request, *args, **kwargs):
+def retrieve(self, request, *args, **kwargs):
+def create(self, request, *args, **kwargs):
+def update(self, request, *args, **kwargs):
+def destroy(self, request, *args, **kwargs):
+
+@action(methods=['GET'], detail=False, url_path='unread-count')
+def unread_count(self, request, *args, **kwargs):
+@action(methods=['POST'], detail=True, permission_classes=[IsAuthenticated])
+def follow(self, request, pk):
+------------------------------------------------------------
+
+
+--------------------- api.serializers ----------------------
+def validate(self, data):
+def create(self, validated_data):
+def update(self, instance, validated_data):
+
+def get_or_create(self):
+def cancel(self):
+
+likes_count = serializers.SerializerMethodField()
+def get_likes_count(self, obj):
+------------------------------------------------------------
 
 """
