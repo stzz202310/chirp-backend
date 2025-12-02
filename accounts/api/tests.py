@@ -1,5 +1,7 @@
-from rest_framework.test import APIClient  # 用于在测试中发送 API 请求
 from rest_framework import status
+from rest_framework.test import APIClient  # 用于在测试中发送 API 请求
+
+from accounts.models import UserProfile
 from testing.testcases import TestCase
 
 LOGIN_URL = '/api/accounts/login/'  # 注意末尾斜杠 '/' 否则 自动重定向，status_code = 301
@@ -123,5 +125,11 @@ class AccountApiTests(TestCase):
         self.assertEqual(response.data['success'], True)
         self.assertEqual(response.data['user']['username'], 'new tester')
 
+        # 6. 验证 user profile 已经被创建
+        created_user_id = response.data['user']['id']
+        profile = UserProfile.objects.filter(user_id=created_user_id).first()
+        self.assertNotEqual(profile, None)
+
+        # 7. 验证用户已经登入
         response = self.client.get(LOGIN_STATUS_URL)
         self.assertEqual(response.data['has_logged_in'], True)

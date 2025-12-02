@@ -50,6 +50,11 @@ print(qs.query)
     2. 数据库访问频率低: 使用MySQL单表即可
        数据库访问频率高: 水平拆分(sharding) 或 分布式存储(HBase|MongoDB), 相当于多个人一起工作 分摊访问压力
        单条数据访问频率极高: 复制 N 份，让流量打到不同的机器
+       
+    3. 把 User 与 UserProfile 拆开，可以让缓存也按“变化频率”分离，直接提高缓存命中率 cache hit
+       拆分 User / UserProfile = 分缓存 = 减少缓存 miss、提升 hit 率、降低缓存 I/O 开销
+       避免 "为了获取 username 却把整个 profile 拉出来" | "profile的更新 导致User缓存失效"
+
 
 class User(models.Model):
 class UserProfile(models.Model):
