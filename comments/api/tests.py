@@ -75,7 +75,7 @@ class CommentAPITest(TestCase):
         # 2. 非{评论作者 OR 推特作者}不能删除
         response = self.zhuzhu_client.delete(url_comment_taotao)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['detail'], 'You do not have permission to access this object.')
+        self.assertEqual(response.data['detail'], 'You do not have permission to delete this object.')
 
         # 3. 评论作者 可以删除
         response = self.taotao_client.delete(url_comment_taotao)

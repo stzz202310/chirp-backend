@@ -1,3 +1,4 @@
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APIClient  # 用于在测试中发送 API 请求
 
@@ -8,6 +9,7 @@ LOGIN_URL = '/api/accounts/login/'  # 注意末尾斜杠 '/' 否则 自动重定
 LOGOUT_URL = '/api/accounts/logout/'
 SIGNUP_URL = '/api/accounts/signup/'
 LOGIN_STATUS_URL = '/api/accounts/login_status/'
+USER_PROFILE_DETAIL_URL = '/api/profiles/{}/'
 
 
 class AccountApiTests(TestCase):
@@ -57,7 +59,7 @@ class AccountApiTests(TestCase):
         })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertNotEquals(response.data['user'], None)
-        self.assertEqual(response.data['user']['email'], self.user.email)
+        self.assertEqual(response.data['user']['id'], self.user.id)
 
         response = self.client.get(LOGIN_STATUS_URL)
         self.assertEqual(response.data['has_logged_in'], True)
@@ -133,3 +135,64 @@ class AccountApiTests(TestCase):
         # 7. 验证用户已经登入
         response = self.client.get(LOGIN_STATUS_URL)
         self.assertEqual(response.data['has_logged_in'], True)
+
+
+class UserProfileAPITests(TestCase):
+
+    def test_update(self):
+        taotao, taotao_client = self.create_user_and_client(username='taotao')
+        zhuzhu, zhuzhu_client = self.create_user_and_client(username='zhuzhu')
+        profile_taotao = taotao.profile
+        profile_taotao.nickname = 'old nickname'
+        profile_taotao.save()
+        url = USER_PROFILE_DETAIL_URL.format(profile_taotao.id)
+
+        # 0. user wrong profile_id
+        url_wrong = USER_PROFILE_DETAIL_URL.format(1000)
+        response = taotao_client.put(path=url_wrong, data={'nickname': 'new nickname'})
+        # 返回 404
+        # a. twitter.urls 如果没有添加 router.register()
+        # b. path='/api/profile/{}/' [profiles vs profile]
+        # c. detail=True: self.get_object()
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        profile_taotao.refresh_from_db()
+        self.assertEqual(profile_taotao.nickname, 'old nickname')
+
+
+        # 1. anonymous user can not update profile
+        response = self.anonymous_client.put(path=url, data={'nickname': 'new nickname'})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        # print(response.data)
+        # {'detail': ErrorDetail(string='Authentication ...', code='not_authenticated')}
+        self.assertEqual(response.data['detail'], 'Authentication credentials were not provided.')
+        profile_taotao.refresh_from_db()
+        self.assertEqual(profile_taotao.nickname, 'old nickname')
+
+        # 1. profile can only be updated by owner
+        response = zhuzhu_client.put(path=url, data={'nickname': 'new nickname'})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        # {'detail': ErrorDetail(string='You do not ...', code='permission_denied')}
+        self.assertEqual(response.data['detail'], 'You do not have permission to access this object.')
+        profile_taotao.refresh_from_db()
+        self.assertEqual(profile_taotao.nickname, 'old nickname')
+
+
+        # 2. update nickname
+        response = taotao_client.put(path=url, data={'nickname': 'new nickname'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        profile_taotao.refresh_from_db()
+        self.assertEqual(profile_taotao.nickname, 'new nickname')
+
+        # 3. update avatar
+        data = {'avatar': SimpleUploadedFile(
+            name='my-avatar.jpg',
+            content=str.encode('a fake image'), # bytes 字节类型
+            content_type='image/jpeg',
+        )}
+        response = taotao_client.put(path=url, data=data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # 为什么不是 ('my-avatar.jpg' in ...)
+        # django: 文件名如果已经存在 my-avatar_3v4R8U4.jpg
+        self.assertEqual('my-avatar' in response.data['avatar'], True)
+        profile_taotao.refresh_from_db()
+        self.assertIsNotNone(profile_taotao.avatar)

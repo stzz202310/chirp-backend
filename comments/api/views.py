@@ -2,7 +2,6 @@ from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
-from comments.api.permissions import IsObjectOwner
 from comments.api.serializers import (
     CommentSerializer,
     CommentSerializerForCreate,
@@ -11,6 +10,7 @@ from comments.api.serializers import (
 from comments.models import Comment
 from inbox.services import NotificationService
 from utils.decorators import required_params
+from utils.permissions import IsObjectOwner, IsCommentOwnerOrTweetOwner
 
 
 class CommentViewSet(viewsets.GenericViewSet):
@@ -30,10 +30,14 @@ class CommentViewSet(viewsets.GenericViewSet):
     # 不能写成 AllowAny 或 IsAuthenticated（那只是类名，而不是权限实例）
         if self.action == 'create':
             return [IsAuthenticated()]
-        if self.action in ('update', 'destroy',):
+        if self.action == 'update':
             # 1. 检查 是否登陆
-            # 2. 检查 IsObjectOwner() 是否有更新|删除的权限
+            # 2. 检查 IsObjectOwner() [只允许 {评论作者：comment.user} 修改评论]
             return [IsAuthenticated(), IsObjectOwner()]
+        if self.action == 'destroy':
+            # 2. 检查 IsCommentOwnerOrTweetOwner()
+            # 允许 {评论作者：comment.user} {推特作者：comment.tweet.user} 删除评论
+            return [IsAuthenticated(), IsCommentOwnerOrTweetOwner()]
         return [AllowAny()]
 
     @required_params(method='GET', params=['tweet_id'])

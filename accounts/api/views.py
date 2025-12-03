@@ -4,26 +4,30 @@ from django.contrib.auth import (
     authenticate as django_authenticate,
 )
 from django.contrib.auth.models import User
-from rest_framework import permissions
 from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
 from accounts.api.serializers import (
     UserSerializer,
     LoginSerializer,
     SignupSerializer,
+    UserSerializerWithProfile,
+    UserProfileSerializerForUpdate,
 )
+from accounts.models import UserProfile
+from utils.permissions import IsObjectOwner
 
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = User.objects.all()       # ModelViewSet 必需
-    serializer_class = UserSerializer   # ModelViewSet 必需
-    permission_classes = [permissions.IsAuthenticated]
+    queryset = User.objects.all()                   # ModelViewSet 必需
+    serializer_class = UserSerializerWithProfile    # ModelViewSet 必需
+    permission_classes = (IsAdminUser,)
 
 
-class AccountViewSet(viewsets.ViewSet):
+class AccountViewSet(viewsets.ViewSet): # 登陆 注册
     serializer_class = SignupSerializer
     """
     urls.py
@@ -123,3 +127,12 @@ class AccountViewSet(viewsets.ViewSet):
             'success': True,
             'user': UserSerializer(instance=user).data,
         }, status=status.HTTP_201_CREATED)
+
+
+class UserProfileViewSet(   # 资料更新
+    viewsets.GenericViewSet,
+    viewsets.mixins.UpdateModelMixin,
+):
+    queryset = UserProfile
+    permission_classes = (IsAuthenticated, IsObjectOwner,)
+    serializer_class = UserProfileSerializerForUpdate
