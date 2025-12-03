@@ -18,16 +18,15 @@ class IsObjectOwner(BasePermission):
         return True
 
     def has_object_permission(self, request, view, obj): # obj = self.get_object()
-        if request.method in ("PUT", "PATCH",):
-            # 只允许 {评论作者：comment.user} 修改评论
-            return request.user == obj.user
+        return request.user == obj.user
 
-        if request.method == "DELETE":
-            """
-            允许以下两种用户删除评论：
-            1. 评论作者：comment.user
-            2. 推特作者：comment.tweet.user
-            """
-            # request.user == obj.tweet.user: 多一次query
-            return request.user == obj.user or request.user.id == obj.tweet.user_id
-        return False
+
+class IsCommentOwnerOrTweetOwner(BasePermission):
+    message = "You do not have permission to delete this object."
+
+    def has_permission(self, request, view):
+        return True
+
+    def has_object_permission(self, request, view, obj): # obj = self.get_object()
+        # request.user == obj.tweet.user: 多一次query
+        return request.user == obj.user or request.user.id == obj.tweet.user_id

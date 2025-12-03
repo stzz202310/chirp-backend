@@ -8,17 +8,17 @@ LOGGING = {
             '()': 'django.utils.log.RequireDebugTrue',
         },
     },
-    # 'disable_existing_loggers': False,
+    'disable_existing_loggers': False,
     'handlers': {
         'console': {
-            'level': 'DEBUG',   # DEBUG -> INFO
+            'level': 'INFO',   # DEBUG -> INFO
             'filters': ['require_debug_true'],
             'class': 'logging.StreamHandler',
         },
     },
     'loggers': {
         'django.db.backends': {
-            'level': 'DEBUG',    # DEBUG -> INFO
+            'level': 'INFO',    # DEBUG -> INFO
             'handlers': ['console'],
             'propagate': False,  # 不向上冒泡, 避免重复输出
         },

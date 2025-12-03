@@ -4,6 +4,8 @@ Automat==20.2.0
 Babel==2.8.0
 bcrypt==3.2.0
 blinker==1.4
+boto3==1.42.0
+botocore==1.41.6
 certifi==2020.6.20
 chardet==4.0.0
 click==8.0.3
@@ -14,11 +16,12 @@ constantly==15.1.0
 cryptography==3.4.8
 dbus-python==1.2.18
 distro==1.7.0
-Django==5.2.8
+Django==4.2.25
 django-debug-toolbar==6.1.0
 django-filter==25.2
 django-model-utils==5.0.0
 django-notifications-hq @ git+https://github.com/django-notifications/django-notifications.git@4c44bcea2504d9a3fcd26366b232a13732a08f2a
+django-storages==1.14.6
 djangorestframework==3.16.1
 httplib2==0.20.2
 hyperlink==21.0.0
@@ -27,6 +30,7 @@ importlib-metadata==4.6.4
 incremental==21.3.0
 jeepney==0.7.1
 Jinja2==3.0.3
+jmespath==1.0.1
 jsonfield==3.2.0
 jsonpatch==1.32
 jsonpointer==2.0
@@ -53,10 +57,12 @@ pyparsing==2.4.7
 pyrsistent==0.18.1
 pyserial==3.5
 python-apt==2.4.0+ubuntu4
+python-dateutil==2.9.0.post0
 python-magic==0.4.24
 pytz==2022.1
 PyYAML==5.4.1
 requests==2.25.1
+s3transfer==0.16.0
 SecretStorage==3.3.1
 service-identity==18.1.0
 six==1.16.0
