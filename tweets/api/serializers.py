@@ -1,10 +1,13 @@
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 
 from accounts.api.serializers import UserSerializerForTweet
 from comments.api.serializers import CommentSerializer
 from likes.api.serializers import LikeSerializer
 from likes.services import LikesService
+from tweets.constants import TWEET_PHOTOS_UPLOAD_LIMIT
 from tweets.models import Tweet
+from tweets.services import TweetService
 
 
 class TweetSerializer(serializers.ModelSerializer):
@@ -15,6 +18,7 @@ class TweetSerializer(serializers.ModelSerializer):
     has_liked = serializers.SerializerMethodField()
     # LikesService.has_liked ==> get_has_liked ==> has_liked => TweetSerializer 需要获取当前的 request.user
     # has_liked: 当前登陆用户request.user 是否赞过这个 tweet
+    photo_urls = serializers.SerializerMethodField()
 
     class Meta:
         model = Tweet
@@ -23,6 +27,7 @@ class TweetSerializer(serializers.ModelSerializer):
             'user',
             'created_at',
             'content',
+            'photo_urls',
 
             'comments_count',
             'likes_count',
@@ -43,6 +48,12 @@ class TweetSerializer(serializers.ModelSerializer):
     def get_comments_count(self, obj):
         return obj.comment_set.count()  # comment_set django定义 [tweet as fk in `Comment`]
 
+    def get_photo_urls(self, obj):
+        photo_urls = []
+        for photo in obj.tweetphoto_set.all().order_by('order'):
+            photo_urls.append(photo.file.url)
+        return photo_urls
+
 
 class TweetSerializerForDetail(TweetSerializer):
     # TweetSerializer: 精简版
@@ -58,6 +69,7 @@ class TweetSerializerForDetail(TweetSerializer):
             'user',
             'created_at',
             'content',
+            'photo_urls',
 
             'comments_count',
             'likes_count',
@@ -75,13 +87,32 @@ class TweetSerializerForDetail(TweetSerializer):
 
 class TweetSerializerForCreate(serializers.ModelSerializer):
     content = serializers.CharField(min_length=6, max_length=140)
+    files = serializers.ListField(
+        child=serializers.FileField(),
+        allow_empty=True,   # {'files': [list]} 检查 val: [list]  是否为空
+        required=False,     # {'files': [list]} 检查 key: 'files' 是否存在
+        # max_length, min_length
+    )
 
     class Meta:
         model = Tweet
-        fields = ('content',)   # 发帖时, 只有 content 可以编辑|需要编辑
+        fields = ('content', 'files')   # 发帖时, 只有 content 和 files [列表 list] 可以编辑|需要编辑
+
+    def validate(self, data):
+        if len(data.get('files', [])) > TWEET_PHOTOS_UPLOAD_LIMIT:
+            raise ValidationError(detail={
+                'message': f'You can upload {TWEET_PHOTOS_UPLOAD_LIMIT} photos '
+                            'at most'
+            })
+        return data
 
     def create(self, validated_data):
         user = self.context['request'].user # user = request.user
         content = validated_data.get('content')
         tweet = Tweet.objects.create(user=user, content=content)
+        if validated_data.get('files'):
+            TweetService.create_photos_from_files(
+                tweet=tweet,
+                files=validated_data.get('files'),
+            )
         return tweet

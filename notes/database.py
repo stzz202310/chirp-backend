@@ -79,6 +79,8 @@ like_set, has_liked, likes_count
         return CommentSerializer(obj.comment_set.all(), many=True).data
         # comments = CommentSerializer(...):  DRF 帮你自动调用了 .data           [不需要手动 .data]
         # return CommentSerializer(...).data: 你控制序列化过程，必须手动返回序列化结果 [需要手动 .data]
+    当前类 及其 子类 [TweetSerializer, TweetSerializerForDetail]
+    class Meta: fields = (⚠️'comments',)
 
 方法 3: related_name(models.py) + source(api.serializers.py)
     Friendship 的多个 ForeignKey 都指向 User

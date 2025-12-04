@@ -56,7 +56,7 @@ class TweetPhoto(models.Model):
     # tweet_photo.user = tweet_photo.tweet.user
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
 
-    # 图片文件
+    # 图片文件  tweetphoto.file[models.FileField()].url
     file = models.FileField()
     # 一个tweet下发了9张图片，可以通过 order 调整顺序
     order = models.IntegerField(default=0)

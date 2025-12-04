@@ -9,3 +9,5 @@ TWEET_PHOTO_STATUS_CHOICES = ( # admin 界面的显示值
     (TweetPhotoStatus.APPROVED, 'Approved'),
     (TweetPhotoStatus.REJECTED, 'Rejected'),
 )
+
+TWEET_PHOTOS_UPLOAD_LIMIT = 9
