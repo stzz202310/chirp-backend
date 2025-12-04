@@ -81,6 +81,7 @@ POST /api/friendships/{user_id=1}/follow/     当前用户request.user 关注 fo
 POST /api/friendships/{user_id=1}/unfollow/   当前用户request.user 取关 unfollow user_id=1 的用户
 GET  /api/friendships/{user_id=1}/followers/  user_id=1 的用户 的粉丝列表
 GET  /api/friendships/{user_id=1}/followings/ user_id=1 的用户 的关注列表
+GET  /api/friendships/1/followers/?size=10&page=3
 
 [Optional: list OR detail]
 GET /api/friendships/?type=follower&to_user_id=1       查询某个用户的粉丝列表
