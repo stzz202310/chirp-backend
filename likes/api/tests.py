@@ -215,8 +215,8 @@ class LikeApiTests(TestCase):
         self.create_newsfeed(self.zhuzhu, tweet)
         response = self.zhuzhu_client.get(NEWSFEED_LIST_API)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['newsfeeds'][0]['tweet']['has_liked'], True)
-        self.assertEqual(response.data['newsfeeds'][0]['tweet']['likes_count'], 2)
+        self.assertEqual(response.data['results'][0]['tweet']['has_liked'], True)
+        self.assertEqual(response.data['results'][0]['tweet']['likes_count'], 2)
 
         # 4. test likes details via TWEET_DETAIL_API
         url = TWEET_DETAIL_API.format(tweet.id)

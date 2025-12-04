@@ -81,7 +81,7 @@ POST /api/friendships/{user_id=1}/follow/     当前用户request.user 关注 fo
 POST /api/friendships/{user_id=1}/unfollow/   当前用户request.user 取关 unfollow user_id=1 的用户
 GET  /api/friendships/{user_id=1}/followers/  user_id=1 的用户 的粉丝列表
 GET  /api/friendships/{user_id=1}/followings/ user_id=1 的用户 的关注列表
-GET  /api/friendships/1/followers/?page=3&size=10
+GET  /api/friendships/{user_id=1}/followings/?page=3&size=10    分页
 
 [Optional: list OR detail]
 GET /api/friendships/?type=follower&to_user_id=1       查询某个用户的粉丝列表
@@ -101,9 +101,12 @@ POST    /api/likes/             create     params=['content_type', 'object_id',]
 POST    /api/likes/cancel/      cancel ✅  params=['content_type', 'object_id',] 取消赞
 DELETE  /api/likes/{like_id}/   destroy❌ 依赖like.id: 前端 点赞 ==> 后端 返回like.id => 前端 才能取消赞
 
-GET     /api/newsfeeds/     list    当前用户request.user 的新鲜事列表newsfeeds [tweet 合集]
+GET /api/newsfeeds/             list        当前用户request.user 的新鲜事列表newsfeeds [tweet 合集]
+GET /api/newsfeeds/?created_at__gt=<created_at>     list 分页
+GET /api/newsfeeds/?created_at__lt=<created_at>     list 分页
 
 GET  /api/tweets/?user_id=1     list        params=['user_id',]   {user_id=1}用户 的所有 tweets
+GET  /api/tweets/?user_id=1&created_at__gt=<created_at>     list 分页
 GET  /api/tweets/{tweet_id=1}/  retrieve    {tweet_id=1}tweet
 POST /api/tweets/               create      data = {'content':, 'files':[列表 list],}
 
