@@ -10,6 +10,7 @@ from friendships.api.serializers import (
     FriendShipSerializerForCreate,
 )
 from friendships.models import Friendship
+from utils.paginations import FriendshipPagination
 
 
 class FriendshipViewSet(viewsets.GenericViewSet):
@@ -22,25 +23,27 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     # queryset.filter(pk=1) 查询一下这个 object 在不在
     queryset = User.objects.all()
     serializer_class = FriendShipSerializerForCreate
+    # 一般来说，不同的 views 所需要的 pagination 规则肯定是不同的，因此一般都需要自定义
+    pagination_class = FriendshipPagination
 
     @action(methods=['GET'], detail=True, permission_classes=[AllowAny])
     def followers(self, request, pk):
         # GET /api/friendships/{pk}/followers/  GET {pk} 的粉丝列表
         friendships = Friendship.objects.filter(to_user_id=pk)
-        serializer = FollowerSerializer(instance=friendships, many=True)
-        return Response(
-            data={'followers': serializer.data},
-            status=status.HTTP_200_OK,
-        )
+        # self.paginator: 根据 pagination_class 新建的属性
+        # def paginate_queryset(self, queryset):
+        #   if self.paginator is None: return None
+        #   return self.paginator.paginate_queryset(queryset, self.request, view=self)
+        page = self.paginate_queryset(queryset=friendships)
+        serializer = FollowerSerializer(instance=page, many=True, context={'request': request})
+        return self.get_paginated_response(serializer.data)
 
     @action(methods=['GET'], detail=True, permission_classes=[AllowAny])
     def followings(self, request, pk):  # GET {pk} 的关注列表
         friendships = Friendship.objects.filter(from_user_id=pk)
-        serializer = FollowingSerializer(instance=friendships, many=True)
-        return Response(
-            data={'followings': serializer.data},
-            status=status.HTTP_200_OK,
-        )
+        page = self.paginate_queryset(queryset=friendships)
+        serializer = FollowingSerializer(instance=page, many=True, context={'request': request})
+        return self.get_paginated_response(serializer.data) # 返回当前页
 
     @action(methods=['POST'], detail=True, permission_classes=[IsAuthenticated])
     def follow(self, request, pk):
@@ -67,7 +70,10 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         friendship = serializer.save()
         return Response(
-            data=FollowingSerializer(instance=friendship).data,
+            data=FollowingSerializer(
+                instance=friendship,
+                context={'request': request}
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 

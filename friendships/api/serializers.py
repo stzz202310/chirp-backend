@@ -4,6 +4,7 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.api.serializers import UserSerializerForFriendship
 from friendships.models import Friendship
+from friendships.services import FriendshipService
 
 
 # 可以通过 source=xxx 指定去访问 model instance 的 xxx property
@@ -11,18 +12,33 @@ from friendships.models import Friendship
 class FollowerSerializer(serializers.ModelSerializer):      # 粉丝列表
     user = UserSerializerForFriendship(source='from_user')  # 类似 别名, from_user AS user
     # user = UserSerializerForFriendship(input -> friendship.from_user)
+    has_followed = serializers.SerializerMethodField()
 
     class Meta:
         model = Friendship
-        fields = ('user', 'created_at')
+        fields = ('user', 'created_at', 'has_followed')
+
+    def get_has_followed(self, obj):
+        user = self.context['request'].user
+        if user.is_anonymous:
+            return False
+        # TODO [HARD] 这个部分会对每个 object 都去执行一次 SQL 查询，速度会很慢，如何优化？
+        return FriendshipService.has_followed(from_user=user, to_user=obj.from_user)
 
 
-class FollowingSerializer(serializers.ModelSerializer):
+class FollowingSerializer(serializers.ModelSerializer): # 关注列表
     user = UserSerializerForFriendship(source='to_user')
+    has_followed = serializers.SerializerMethodField()
 
     class Meta:
         model = Friendship
-        fields = ('user', 'created_at')
+        fields = ('user', 'created_at', 'has_followed',)
+
+    def get_has_followed(self, obj):
+        user = self.context['request'].user
+        if user.is_anonymous:
+            return False
+        return FriendshipService.has_followed(from_user=user, to_user=obj.to_user)
 
 
 class FriendShipSerializerForCreate(serializers.ModelSerializer):
