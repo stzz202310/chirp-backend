@@ -1,8 +1,10 @@
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from testing.testcases import TestCase
-from tweets.models import Tweet
+from tweets.constants import TWEET_PHOTOS_UPLOAD_LIMIT
+from tweets.models import Tweet, TweetPhoto
 
 # 注意结尾要加 '/', 要不然会产生 301 redirect
 TWEET_LIST_API = '/api/tweets/'
@@ -103,3 +105,63 @@ class TweetApiTest(TestCase):
         profile = self.user1.profile
         self.assertEqual(response.data['user']['nickname'], profile.nickname)
         self.assertEqual(response.data['user']['avatar_url'], None)
+
+    def test_create_with_files(self):
+        # 1. 上传空文件列表
+        data = {'content': 'empty content', 'files': [],}
+        response = self.user1_client.post(path=TWEET_CREATE_API, data=data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TweetPhoto.objects.count(), 0)
+
+        # 2. 上传单个文件
+        # content 需要是一个 bytes 类型，所以用 str.encode 转换一下
+        file = SimpleUploadedFile(
+            name='selfie.jpg',
+            content=str.encode('selfie'),
+            content_type='image/jpeg',
+        )
+        data = {'content': 'a selfie', 'files': [file]}
+        response = self.user1_client.post(path=TWEET_CREATE_API, data=data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TweetPhoto.objects.count(), 1)
+
+        # 3. 上传多个文件
+        file1 = SimpleUploadedFile(
+            name='selfie1.jpg',
+            content=str.encode('selfie1'),
+            content_type='image/jpeg',
+        )
+        file2 = SimpleUploadedFile(
+            name='selfie2.jpg',
+            content=str.encode('selfie2'),
+            content_type='image/jpeg',
+        )
+        data = {'content': 'two selfies', 'files': [file1, file2],}
+        response = self.user1_client.post(path=TWEET_CREATE_API, data=data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TweetPhoto.objects.count(), 3)
+
+        # 4. 从读取的 API 里确保已经包含了 photo 的地址
+        retrieve_url = TWEET_RETRIEVE_API.format(response.data['id'])
+        response = self.user1_client.get(retrieve_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['photo_urls']), 2)
+        self.assertEqual('selfie1' in response.data['photo_urls'][0], True)
+        self.assertEqual('selfie2' in response.data['photo_urls'][1], True)
+
+        # 5. 测试上传超过 9个文件会失败
+        files = [
+            SimpleUploadedFile(
+                name=f'selfie{i}.jpg',
+                content=str.encode(f'selfie{i}'),
+                content_type='image/jpeg',
+            )
+            for i in range(10)
+        ]
+        data = {'content': 'failed due to number of photos exceeded limit', 'files': files}
+        response = self.user1_client.post(path=TWEET_CREATE_API, data=data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data['errors']['message'][0],
+            f'You can upload {TWEET_PHOTOS_UPLOAD_LIMIT} photos at most')
+        self.assertEqual(TweetPhoto.objects.count(), 3)

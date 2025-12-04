@@ -104,6 +104,6 @@ GET     /api/newsfeeds/     list    当前用户request.user 的新鲜事列表n
 
 GET  /api/tweets/?user_id=1     list        params=['user_id',]   {user_id=1}用户 的所有 tweets
 GET  /api/tweets/{tweet_id=1}/  retrieve    {tweet_id=1}tweet
-POST /api/tweets/               create
+POST /api/tweets/               create      data = {'content':, 'files':[列表 list],}
 
 """
