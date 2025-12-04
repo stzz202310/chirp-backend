@@ -5,6 +5,7 @@ from rest_framework.test import APIClient
 from testing.testcases import TestCase
 from tweets.constants import TWEET_PHOTOS_UPLOAD_LIMIT
 from tweets.models import Tweet, TweetPhoto
+from utils.paginations import EndlessPagination
 
 # 注意结尾要加 '/', 要不然会产生 301 redirect
 TWEET_LIST_API = '/api/tweets/'
@@ -39,15 +40,15 @@ class TweetApiTest(TestCase):
         # 2 正常 request
         response = self.anonymous_client.get(TWEET_LIST_API, data={'user_id': self.user1.id})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['tweets']), 3)
+        self.assertEqual(len(response.data['results']), 3)
 
         response = self.anonymous_client.get(TWEET_CREATE_API, data={'user_id': self.user2.id})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['tweets']), 2)
+        self.assertEqual(len(response.data['results']), 2)
 
         # 2_1 检测排序是按照新创建的在前面的顺序来的 '-created_at'
-        self.assertEqual(response.data['tweets'][0]['id'], self.tweets2[1].id)
-        self.assertEqual(response.data['tweets'][1]['id'], self.tweets2[0].id)
+        self.assertEqual(response.data['results'][0]['id'], self.tweets2[1].id)
+        self.assertEqual(response.data['results'][1]['id'], self.tweets2[0].id)
 
     def test_create_api(self):
         # 1 必须登陆
@@ -165,3 +166,62 @@ class TweetApiTest(TestCase):
             response.data['errors']['message'][0],
             f'You can upload {TWEET_PHOTOS_UPLOAD_LIMIT} photos at most')
         self.assertEqual(TweetPhoto.objects.count(), 3)
+
+    def test_pagination(self):
+        page_size = EndlessPagination.page_size
+
+        # 1. create page_size*2 tweets [we have created self.tweets in setUp]
+        for i in range(page_size * 2 - len(self.tweets1)):
+            self.tweets1.append(self.create_tweet(user=self.user1,content=f'tweet{i}'))
+
+        tweets = self.tweets1[::-1] # 倒序 {最新的帖子 tweets[0]}
+
+        # 2. pull the first page
+        response = self.user1_client.get(
+            path=TWEET_LIST_API,
+            data={'user_id': self.user1.id},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['has_next_page'], True)
+        self.assertEqual(len(response.data['results']), page_size)
+        self.assertEqual(response.data['results'][0]['id'], tweets[0].id)
+        self.assertEqual(response.data['results'][1]['id'], tweets[1].id)
+        self.assertEqual(response.data['results'][page_size - 1]['id'], tweets[page_size - 1].id)
+
+        # 3. pull the second page
+        response = self.user1_client.get(
+            path=TWEET_LIST_API,
+            data={
+                'user_id': self.user1.id,
+                'created_at__lt': tweets[page_size - 1].created_at,
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['has_next_page'], False)
+        self.assertEqual(len(response.data['results']), page_size)
+        self.assertEqual(response.data['results'][0]['id'], tweets[0 + page_size].id)
+        self.assertEqual(response.data['results'][1]['id'], tweets[1 + page_size].id)
+        self.assertEqual(
+            response.data['results'][page_size - 1]['id'],
+            tweets[page_size - 1 + page_size].id
+        )
+        # tweets[idx] = tweets[当前页_idx + page_size * (page_num - 1)]
+
+        # 4. pull latest tweets
+        response = self.user1_client.get(
+            path=TWEET_LIST_API,
+            data={'user_id': self.user1.id, 'created_at__gt':tweets[0].created_at}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['has_next_page'], False)
+        self.assertEqual(len(response.data['results']), 0)
+
+        new_tweet = self.create_tweet(user=self.user1, content='a new tweet comes in')
+        response = self.user1_client.get(
+            path=TWEET_LIST_API,
+            data={'user_id': self.user1.id, 'created_at__gt':tweets[0].created_at}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['has_next_page'], False)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['id'], new_tweet.id)
