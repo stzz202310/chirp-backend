@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from testing.testcases import TestCase
+from utils.paginations import EndlessPagination
 
 NEWSFEEDS_URL = '/api/newsfeeds/'
 POST_TWEETS_URL = '/api/tweets/'
@@ -29,12 +30,12 @@ class NewsFeedApiTests(TestCase):
         # 3. 一开始啥都没有
         response = self.taotao_client.get(NEWSFEEDS_URL)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['newsfeeds']), 0)
+        self.assertEqual(len(response.data['results']), 0)
         # 4. 自己发的信息是可以看到的
         self.taotao_client.post(POST_TWEETS_URL, data={'content': "Hello Zhuzhu!"})
         response = self.taotao_client.get(NEWSFEEDS_URL)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['newsfeeds']), 1)
+        self.assertEqual(len(response.data['results']), 1)
         # 5. 关注之后可以看到别人发的
         self.taotao_client.post(FOLLOW_URL.format(self.zhuzhu.id))
         response = self.zhuzhu_client.post(
@@ -43,5 +44,63 @@ class NewsFeedApiTests(TestCase):
         )
         posted_tweet_id = response.data['id']
         response = self.taotao_client.get(NEWSFEEDS_URL)
-        self.assertEqual(len(response.data['newsfeeds']), 2)
-        self.assertEqual(response.data['newsfeeds'][0]['tweet']['id'], posted_tweet_id)
+        self.assertEqual(len(response.data['results']), 2)
+        self.assertEqual(response.data['results'][0]['tweet']['id'], posted_tweet_id)
+
+    def test_pagination(self):
+        page_size = EndlessPagination.page_size
+        followed_user = self.create_user(username='followed')
+        newsfeeds = []
+        for i in range(page_size * 2):
+            tweet = self.create_tweet(user=followed_user)
+            newsfeed = self.create_newsfeed(user=self.taotao, tweet=tweet)
+            newsfeeds.append(newsfeed)
+        newsfeeds = newsfeeds[::-1]
+
+        # 1. pull the 1st page
+        response = self.taotao_client.get(NEWSFEEDS_URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['has_next_page'], True)
+        self.assertEqual(len(response.data['results']), page_size)
+        self.assertEqual(response.data['results'][0]['id'], newsfeeds[0].id)
+        self.assertEqual(response.data['results'][1]['id'], newsfeeds[1].id)
+        self.assertEqual(
+            response.data['results'][page_size - 1]['id'],
+            newsfeeds[page_size - 1].id,
+        )
+
+        # 2. pull the 2nd page
+        response = self.taotao_client.get(
+            path=NEWSFEEDS_URL,
+            data={'created_at__lt': newsfeeds[page_size - 1].created_at},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['has_next_page'], False)
+        results = response.data['results']
+        self.assertEqual(len(results), page_size)
+        self.assertEqual(results[0]['id'], newsfeeds[0 + page_size].id)
+        self.assertEqual(results[1]['id'], newsfeeds[1 + page_size].id)
+        self.assertEqual(
+            results[page_size - 1]['id'],
+            newsfeeds[page_size - 1 + page_size].id,
+        )
+
+        # 3. pull latest newsfeed
+        response = self.taotao_client.get(
+            path=NEWSFEEDS_URL,
+            data={'created_at__gt': newsfeeds[0].created_at},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['has_next_page'], False)
+        self.assertEqual(len(response.data['results']), 0)
+
+        tweet = self.create_tweet(user=followed_user)
+        new_newsfeed = self.create_newsfeed(user=self.taotao, tweet=tweet)
+        response = self.taotao_client.get(
+            path=NEWSFEEDS_URL,
+            data={'created_at__gt': newsfeeds[0].created_at}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['has_next_page'], False)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['id'], new_newsfeed.id)

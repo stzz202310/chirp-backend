@@ -33,7 +33,7 @@ class TweetViewSet(viewsets.GenericViewSet):
         # 这句 SQL 查询会用到 user 和 created_at 的联合索引
         # 单纯的 user 索引是不够的
         tweets = Tweet.objects.filter(user_id=user_id).order_by('-created_at')
-        tweets = self.paginate_queryset(tweets) # 分页
+        tweets = self.paginate_queryset(queryset=tweets) # 分页
 
         # many = True, return list of dict
         # 1. if tweets 是一个 QuerySet
