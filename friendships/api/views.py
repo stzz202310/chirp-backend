@@ -4,13 +4,13 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
+from friendships.api.paginations import FriendshipPagination
 from friendships.api.serializers import (
     FollowingSerializer,
     FollowerSerializer,
     FriendShipSerializerForCreate,
 )
 from friendships.models import Friendship
-from utils.paginations import FriendshipPagination
 
 
 class FriendshipViewSet(viewsets.GenericViewSet):
@@ -36,14 +36,14 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         #   return self.paginator.paginate_queryset(queryset, self.request, view=self)
         page = self.paginate_queryset(queryset=friendships)
         serializer = FollowerSerializer(instance=page, many=True, context={'request': request})
-        return self.get_paginated_response(serializer.data)
+        return self.get_paginated_response(data=serializer.data)
 
     @action(methods=['GET'], detail=True, permission_classes=[AllowAny])
     def followings(self, request, pk):  # GET {pk} 的关注列表
         friendships = Friendship.objects.filter(from_user_id=pk)
         page = self.paginate_queryset(queryset=friendships)
         serializer = FollowingSerializer(instance=page, many=True, context={'request': request})
-        return self.get_paginated_response(serializer.data) # 返回当前页
+        return self.get_paginated_response(data=serializer.data) # 返回当前页
 
     @action(methods=['POST'], detail=True, permission_classes=[IsAuthenticated])
     def follow(self, request, pk):
