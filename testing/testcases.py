@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import caches
 from django.test import TestCase as DjangoTestCase
 from rest_framework.test import APIClient
 
@@ -8,13 +9,15 @@ from likes.models import Like
 from newsfeeds.models import NewsFeed
 from tweets.models import Tweet
 
-
 """
 create {comment, tweet, like, newsfeed}
 1. 前端要求创建 via API
 2. 测试要求创建 via testcases.create_tweet(user=user)
 """
 class TestCase(DjangoTestCase):
+
+    def clear_cache(self):
+        caches['testing'].clear()
 
     @property
     def anonymous_client(self):

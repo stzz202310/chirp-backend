@@ -19,10 +19,7 @@ class Comment(models.Model):
 
     class Meta:
         # 需求: 在某个 Tweet 下排序所有 comments [comment.like_set]
-        # index_together = (('tweet', 'created_at'),)
-        indexes = [
-            models.Index(fields=('tweet', 'created_at'),),
-        ]
+        index_together = (('tweet', 'created_at'),)
 
     @property
     def like_set(self):

@@ -16,13 +16,13 @@ constantly==15.1.0
 cryptography==3.4.8
 dbus-python==1.2.18
 distro==1.7.0
-Django==4.2.25
+Django==3.2.21
 django-debug-toolbar==6.1.0
 django-filter==25.2
 django-model-utils==5.0.0
-django-notifications-hq @ git+https://github.com/django-notifications/django-notifications.git@4c44bcea2504d9a3fcd26366b232a13732a08f2a
+django-notifications-hq==1.6.0
 django-storages==1.14.6
-djangorestframework==3.16.1
+djangorestframework==3.13.1
 httplib2==0.20.2
 hyperlink==21.0.0
 idna==3.3
@@ -52,6 +52,7 @@ pyasn1-modules==0.2.1
 PyGObject==3.42.1
 PyHamcrest==2.0.2
 PyJWT==2.3.0
+pymemcache==4.0.0
 pyOpenSSL==21.0.0
 pyparsing==2.4.7
 pyrsistent==0.18.1
