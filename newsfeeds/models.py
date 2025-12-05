@@ -12,14 +12,8 @@ class NewsFeed(models.Model):
     # [冗余]等于tweet.created_at; 原因 必须是字段，才能 index_together
 
     class Meta:
-        indexes = [
-            models.Index(fields=('user', 'created_at'),),
-        ]
-        # index_together = (('user', 'created_at'),)
-        constraints = [
-            models.UniqueConstraint(fields=('user', 'tweet'), name='unique_user_tweet',),
-        ]
-        # unique_together = (('user', 'tweet'),)
+        index_together = (('user', 'created_at'),)
+        unique_together = (('user', 'tweet'),)
         ordering = ('-created_at',)
 
     def __str__(self):

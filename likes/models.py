@@ -28,16 +28,15 @@ class Like(models.Model):
         # 这里使用 unique together 会建一个 <user, content_type, object_id> 的索引
         # 这个索引同时还可以具备查询某个 user like 了哪些不同的 objects 的功能
         # 因此如果 unique together 改成 <content_type, object_id, user> 就没有这样的效果了
-        constraints = [
-            models.UniqueConstraint(fields=('user', 'content_type', 'object_id'), name='unique_like',),
-        ]
+        unique_together = (('user', 'content_type', 'object_id'),)
+
         # 这个 index 的作用是可以按照时间顺序排序 {content_object: content_type + object_id} 的所有likes
         # 1. 某个 tweet | comment 所有 [按照时间排序] 的likes
         # 2. 某个 user 给哪些 tweet | comment [按照时间排序] 点过赞
-        indexes = [
-            models.Index(fields=('content_type', 'object_id', 'created_at'),),
-            models.Index(fields=('user', 'content_type', 'created_at'),),
-        ]
+        index_together = (
+            ('content_type', 'object_id', 'created_at'),
+            ('user', 'content_type', 'created_at'),
+        )
 
     def __str__(self):
         return '{} - {} liked {} {}'.format(

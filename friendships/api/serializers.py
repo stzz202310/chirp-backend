@@ -7,11 +7,29 @@ from friendships.models import Friendship
 from friendships.services import FriendshipService
 
 
-# 可以通过 source=xxx 指定去访问 model instance 的 xxx property
-# 即 model_instance.xxx 来获得数据
-class FollowerSerializer(serializers.ModelSerializer):      # 粉丝列表
+class FollowingUserIdSetMixin: # mixin: 插件
+
+    @property
+    def following_user_id_set(self: serializers.ModelSerializer):
+        # [http request -> web服务器 -> http response]
+        # instance|object 级别的缓存: 进程结束，缓存就会被释放
+        if self.context.get('request').user.is_anonymous:
+            return {}
+        if hasattr(self, '_cached_following_user_id_set'):
+            return self._cached_following_user_id_set
+        user_id_set = FriendshipService.get_following_user_id_set(
+            from_user_id=self.context['request'].user.id,
+        )
+        setattr(self, '_cached_following_user_id_set', user_id_set)
+        return user_id_set
+
+
+class FollowerSerializer(serializers.ModelSerializer, FollowingUserIdSetMixin): # 粉丝列表
     user = UserSerializerForFriendship(source='from_user')  # 类似 别名, from_user AS user
     # user = UserSerializerForFriendship(input -> friendship.from_user)
+    # 可以通过 source=xxx 指定去访问 model instance 的 xxx property
+    # 即 model_instance.xxx 来获得数据
+    # https://www.django-rest-framework.org/api-guide/serializers/#specifying-fields-explicitly
     has_followed = serializers.SerializerMethodField()
 
     class Meta:
@@ -19,14 +37,10 @@ class FollowerSerializer(serializers.ModelSerializer):      # 粉丝列表
         fields = ('user', 'created_at', 'has_followed')
 
     def get_has_followed(self, obj):
-        user = self.context['request'].user
-        if user.is_anonymous:
-            return False
-        # TODO [HARD] 这个部分会对每个 object 都去执行一次 SQL 查询，速度会很慢，如何优化？
-        return FriendshipService.has_followed(from_user=user, to_user=obj.from_user)
+        return obj.from_user_id in self.following_user_id_set
 
 
-class FollowingSerializer(serializers.ModelSerializer): # 关注列表
+class FollowingSerializer(serializers.ModelSerializer, FollowingUserIdSetMixin): # 关注列表
     user = UserSerializerForFriendship(source='to_user')
     has_followed = serializers.SerializerMethodField()
 
@@ -35,10 +49,7 @@ class FollowingSerializer(serializers.ModelSerializer): # 关注列表
         fields = ('user', 'created_at', 'has_followed',)
 
     def get_has_followed(self, obj):
-        user = self.context['request'].user
-        if user.is_anonymous:
-            return False
-        return FriendshipService.has_followed(from_user=user, to_user=obj.to_user)
+        return obj.to_user_id in self.following_user_id_set
 
 
 class FriendShipSerializerForCreate(serializers.ModelSerializer):

@@ -206,6 +206,33 @@ AWS_S3_REGION_NAME = 'us-west-1'
 # - media 里使用户上传的数据文件，而不是代码
 MEDIA_ROOT = 'media/'   # if TESTING: ... [.gitignore]
 
+# https://docs.djangoproject.com/en/3.1/topics/cache/
+# sudo apt-get install memcached
+# use `pip install python-memcached`
+# DO NOT `pip install memcache or django-memcached`
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
+        'LOCATION': '127.0.0.1:11211',
+        'TIMEOUT': 86400,   # ttl: time to live 保证数据的一致性
+        # 1. 超时
+        # 2. 主动删除
+        # 3. 内存不够用，访问频率低的被删除 LRU
+
+        # from django.core.cache import cache
+        # cache.get('key1')
+        # cache.set('key1', 'val1', timeout=100)
+        # cache.get('key1') -> return val1
+        # ... 100 seconds later
+        # cache.get('key1') -> 不存在，返回 None
+    },
+    'testing': {
+        'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
+        'LOCATION': '127.0.0.1:11211',  # 本机 | memcached服务器的ip地址
+        'TIMEOUT': 86400,
+        'KEY_PREFIX': 'testing',
+    },
+}
 
 try:
     from twitter.local_settings import *
