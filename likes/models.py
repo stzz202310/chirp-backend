@@ -3,7 +3,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 
-from accounts.services import UserService
+from utils.memcached_helper import MemcachedHelper
 
 
 class Like(models.Model):
@@ -50,4 +50,8 @@ class Like(models.Model):
 
     @property
     def cached_user(self):
-        return UserService.get_user_through_cache(user_id=self.user_id)
+        return MemcachedHelper.get_object_through_cache(
+            model_class=User,
+            object_id=self.user_id,
+            # 千万不要 self.user.id: 会产生数据库的查询，白缓存了
+        )

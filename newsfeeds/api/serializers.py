@@ -5,7 +5,7 @@ from tweets.api.serializers import TweetSerializer
 
 
 class NewsFeedSerializer(serializers.ModelSerializer):
-    tweet = TweetSerializer() # has_liked: 需要获取当前的 request.user
+    tweet = TweetSerializer(source='cached_tweet') # has_liked: 需要获取当前的 request.user
 
     class Meta:
         model = NewsFeed

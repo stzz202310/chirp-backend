@@ -1,6 +1,11 @@
 """
 memcached: key-value [key, val 都是字符串]
 
+Friendships: Followings
+User
+UserProfile
+Tweet
+
 key is 'followings:3'
 val is set {1, 2, 5}
 1. cache.set: django 会将 set_val 序列化成 字符串val，保存在 memcached 中
@@ -20,9 +25,9 @@ FOLLOWINGS_PATTERN:
 1. [明星的]粉丝 数量大
 2. [明星的]粉丝 更新快，容易缓存失效"
 """
-FOLLOWINGS_PATTERN = 'followings:{user_id}' # key: {user_id}用户的关注列表
-USER_PATTERN = 'user:{user_id}'
-USER_PROFILE_PATTERN = 'userprofile:{user_id}'
-# user_id (not userprofile_id) 是很多表单的外键
+FOLLOWINGS_PATTERN = 'followings:{user_id}'     # val: {user_id}用户的关注列表
+# USER_PATTERN = 'user:{user_id}'               # val: {user_id}用户的user信息
+USER_PROFILE_PATTERN = 'userprofile:{user_id}'  # val: {user_id}用户的user profile
+# user_id (not UserProfile_id) 是很多表单的外键
 
 # redis
