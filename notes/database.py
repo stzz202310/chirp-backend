@@ -69,9 +69,15 @@ class PushPreference(models.Model):
 like_set, has_liked, likes_count
 方法 1: models.py
     @property
-    def like_set(self): 
+    def like_set(self 尽量不要带其他的参数):
+    +
+    class TweetSerializerForDetail(TweetSerializer):
+        likes = LikeSerializer(source='like_set', many=True)
 
-方法 2: api.serializers.py [通过计算得到, 仅 Like Model 的信息不够, 所以不放在 models.py]
+方法 2: api.serializers.py 
+    A. 通过计算得到, 仅 Like Model 的信息不够, 所以不放在 models.py
+    B. models 是最底层，尽量不要有其他依赖 [views, serializers, services 都会依赖 models]
+
     comments = serializers.SerializerMethodField()
     def get_comments(self, obj):
         self: serializer

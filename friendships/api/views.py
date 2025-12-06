@@ -71,7 +71,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
 
         friendship = serializer.save()
         # /localhost/admin/ 如果对 Friendship 进行修改，则无法触发 '删除缓存'
-        FriendshipService.invalidate_following_cache(request.user.id)
+        # FriendshipService.invalidate_following_cache(request.user.id)
         return Response(
             data=FollowingSerializer(
                 instance=friendship,
@@ -95,7 +95,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
             from_user=request.user,
             to_user=unfollow_user,
         ).delete()  # 没有 follow 的情况下 unfollow 静默处理
-        FriendshipService.invalidate_following_cache(request.user.id)
+        # FriendshipService.invalidate_following_cache(request.user.id)
         return Response(data={'success': True, 'deleted': deleted,})
 
     def list(self, request):

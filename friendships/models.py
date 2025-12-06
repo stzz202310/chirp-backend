@@ -1,5 +1,9 @@
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models.signals import post_save, pre_delete
+
+from friendships.listeners import invalidate_following_cache
+from accounts.services import UserService
 
 
 class Friendship(models.Model):
@@ -35,3 +39,19 @@ class Friendship(models.Model):
 
     def __str__(self):
         return '{} followed {}'.format(self.from_user_id, self.to_user_id)
+
+    @property
+    def cached_from_user(self):
+        return UserService.get_user_through_cache(user_id=self.from_user_id)
+
+    @property
+    def cached_to_user(self):
+        return UserService.get_user_through_cache(user_id=self.to_user_id)
+
+
+# hook up with listeners to invalidate cache
+pre_delete.connect(receiver=invalidate_following_cache, sender=Friendship)
+# 为什么缓存一般在 pre_delete 删除？post_delete后, instance就被删除了
+post_save.connect(receiver=invalidate_following_cache, sender=Friendship)
+# post_save: update / create 都会调用 save() => 删除对应的缓存
+# post_save.connect(函数名, sender=Model模型名字)
