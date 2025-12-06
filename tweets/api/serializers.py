@@ -11,7 +11,7 @@ from tweets.services import TweetService
 
 
 class TweetSerializer(serializers.ModelSerializer):
-    user = UserSerializerForTweet()
+    user = UserSerializerForTweet(source='cached_user')
     # serializers.SerializerMethodField() ==> def get_XXX(self, obj | instance):
     comments_count = serializers.SerializerMethodField()
     likes_count = serializers.SerializerMethodField()

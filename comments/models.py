@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 
+from accounts.services import UserService
 from likes.models import Like
 from tweets.models import Tweet
 
@@ -21,13 +22,6 @@ class Comment(models.Model):
         # 需求: 在某个 Tweet 下排序所有 comments [comment.like_set]
         index_together = (('tweet', 'created_at'),)
 
-    @property
-    def like_set(self):
-        return Like.objects.filter(
-            content_type=ContentType.objects.get_for_model(Comment),
-            object_id=self.id,
-        ).order_by('-created_at')
-
     def __str__(self):
         return '{} - {} says {} at tweet {}'.format(
             self.created_at,
@@ -35,3 +29,14 @@ class Comment(models.Model):
             self.content,
             self.tweet_id,
         )
+
+    @property
+    def like_set(self):
+        return Like.objects.filter(
+            content_type=ContentType.objects.get_for_model(Comment),
+            object_id=self.id,
+        ).order_by('-created_at')
+
+    @property
+    def cached_user(self):
+        return UserService.get_user_through_cache(user_id=self.user_id)

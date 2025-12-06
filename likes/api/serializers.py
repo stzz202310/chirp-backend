@@ -9,11 +9,18 @@ from tweets.models import Tweet
 
 
 class LikeSerializer(serializers.ModelSerializer):
-    user = UserSerializerForLike()
+    user = UserSerializerForLike(source='cached_user')
+    # user = serializers.SerializerMethodField()  方法 1
 
     class Meta:
         model = Like
         fields = ('user', 'created_at') # 基于 comment | tweet 获得点赞信息
+
+    # def get_user(self, obj):  方法 1
+    #     from accounts.services import UserService
+    #     user = UserService.get_user_through_cache(user_id=obj.user_id)
+    #     serializer = UserSerializerForLike(instance=user)
+    #     return serializer.data
 
 
 class BaseLikeSerializerForCreateAndCancel(serializers.ModelSerializer): # ✅继承

@@ -4,6 +4,7 @@ from testing.testcases import TestCase
 class CommentModelTest(TestCase):
 
     def setUp(self):
+        self.clear_cache()
         self.taotao = self.create_user('taotao')
         self.zhuzhu = self.create_user('zhuzhu')
         self.tweet = self.create_tweet(user=self.taotao)

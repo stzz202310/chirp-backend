@@ -69,6 +69,7 @@ class AccountViewSet(viewsets.ViewSet): # 登陆 注册
             'ip': request.META.get('REMOTE_ADDR'),
         }
         if request.user.is_authenticated:
+            # request.user 已经在内存中了，不需要通过 缓存
             data['user'] = UserSerializer(instance=request.user).data
         return Response(data=data)
 

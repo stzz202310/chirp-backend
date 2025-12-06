@@ -1,9 +1,12 @@
 from django.db import models
+from django.db.models.signals import post_save, pre_delete
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import caches
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import include, path
@@ -16,7 +19,8 @@ from rest_framework import viewsets
 
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.test import APIClient
 

@@ -53,22 +53,12 @@ class FriendshipService(object):
         return [friendship.from_user for friendship in friendships]
         # 正确的写法三: 直接用 user_id instead of user
 
-    @classmethod
-    def has_followed(cls, from_user, to_user):
-        # {request.user 眼中} zhuzhu的关注列表
-        # 1. 小倔驴    [取关]
-        # 2. 糖葫芦    [关注]
-        # 3. 喵喵喵    [关注]
-        return Friendship.objects.filter(
-            from_user=from_user,
-            to_user=to_user,
-        ).exists()
 
     @classmethod
     def get_following_user_id_set(cls, from_user_id):   # memcached 缓存
         key = FOLLOWINGS_PATTERN.format(user_id=from_user_id)
         user_id_set = cache.get(key)
-        if user_id_set is not None:
+        if user_id_set is not None: # key 如果不存在, 也不会报错 return None
             return user_id_set
 
         firendships = Friendship.objects.filter(from_user_id=from_user_id)

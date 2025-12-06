@@ -231,6 +231,13 @@ CACHES = {
         'LOCATION': '127.0.0.1:11211',  # 本机 | memcached服务器的ip地址
         'TIMEOUT': 86400,
         'KEY_PREFIX': 'testing',
+        # 实际存储的 key: 'testing_followings:3'
+        
+        # Django 在每个测试结束后 只会删除测试数据库
+        # 不会自动清空缓存，因为 cache 是外部系统（memcached）
+        # 所以测试期间写入的 cache key 仍然存在，需要手动清理
+        # def setUp(self):
+        #   self.clear_cache()
     },
 }
 

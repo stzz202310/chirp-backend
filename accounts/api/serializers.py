@@ -22,6 +22,7 @@ class UserSerializerWithProfile(UserSerializer):
 
     def get_avatar_url(self, obj):
         # return obj.profile.avatar.url [如果 {obj.profile.avatar is None} 会报错]
+        # obj.profile: 已经通过 cache 优化
         if obj.profile.avatar:
             return obj.profile.avatar.url
         return None

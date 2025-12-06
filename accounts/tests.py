@@ -3,6 +3,10 @@ from testing.testcases import TestCase
 
 
 class UserProfileTests(TestCase):
+
+    def setUp(self):
+        self.clear_cache()
+
     def test_profile_property(self):
         taotao = self.create_user(username='taotao')
         self.assertEqual(UserProfile.objects.count(), 0)
