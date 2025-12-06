@@ -1,9 +1,8 @@
 from django.conf import settings
-from django.contrib.auth.models import User
 from django.core.cache import caches
 
 from accounts.models import UserProfile
-from twitter.cache import USER_PATTERN, USER_PROFILE_PATTERN
+from twitter.cache import USER_PROFILE_PATTERN
 
 cache = caches['testing'] if settings.TESTING else caches['default']
 
@@ -11,30 +10,10 @@ cache = caches['testing'] if settings.TESTING else caches['default']
 class UserService:
 
     @classmethod
-    def get_user_through_cache(cls, user_id):
-        key = USER_PATTERN.format(user_id=user_id)
-
-        # 1. read from cache
-        user = cache.get(key)
-        if user is not None:
-            # cache hit
-            return user
-
-        # 2. cache miss, read from db
-        try:
-            user = User.objects.get(pk=user_id)
-            cache.set(key, user)
-        except User.DoesNotExist:
-            user = None
-        return user
-
-    @classmethod
-    def invalidate_user(cls, user_id):
-        key = USER_PATTERN.format(user_id=user_id)
-        cache.delete(key)
-
-    @classmethod
     def get_profile_through_cache(cls, user_id):
+        # user profile 比较特殊
+        # 1. USER_PROFILE_PATTERN = 'userprofile:{user_id}'
+        # 2. get_or_create
         key = USER_PROFILE_PATTERN.format(user_id=user_id)
 
         profile = cache.get(key)
