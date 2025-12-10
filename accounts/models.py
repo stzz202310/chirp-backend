@@ -9,7 +9,7 @@ from utils.listeners import invalidate_object_cache
 class UserProfile(models.Model):
     # OneToOneField 会创建一个 unique index, 确保不会有多个 UserProfile 指向同一个 User
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True)
-    # Django 还有一个 ImageField，但是尽量不要用，会有很多的其他问题，用 FileField 可以起到同样的效果。
+    # Django 还有一个 ImageField，但是尽量不要用，会有很多的其他问题，用 FileField 可以起到同样的效果
     # 因为最后我们都是以文件形式存储起来，使用的是文件的 url 进行访问
     avatar = models.FileField(null=True)
     # 当一个 user 被创建之后，会创建一个 user profile 的 object
@@ -26,11 +26,12 @@ class UserProfile(models.Model):
 定义一个 profile 的 property 方法，植入到 User 这个 model 里
 这样当我们通过 user 的一个实例化对象访问 profile 的时候 [user_instance.profile]
 就会在 UserProfile 中进行 get_or_create 来获得对应的 profile 的 object
-这种写法实际上是一个利用 Python 的灵活性进行 hack 的方法，这样会方便我们通过 user 快速
-访问到对应的 profile 信息。
+这种写法实际上是一个利用 Python 的灵活性进行 hack 的方法，这样会方便我们通过 user
+快速访问到对应的 profile 信息。
 """
 def get_profile(user):
     # models: 最底层，尽量不要有其他依赖 [views, serializers, services 都会依赖 models]
+    # import 放在函数里面避免循环依赖
     from accounts.services import UserService
     if hasattr(user, '_cached_user_profile'):
         # return user._cached_user_profile

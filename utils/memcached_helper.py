@@ -13,9 +13,9 @@ class MemcachedHelper:
     @classmethod
     def get_object_through_cache(cls, model_class, object_id):
         key = cls.get_key(model_class=model_class, object_id=object_id)
-        # 1. cache hit
+        # 1. read from cache first
         obj = cache.get(key)
-        if obj:
+        if obj: # cache hit return
             return obj
 
         # 2. cache miss, read from database

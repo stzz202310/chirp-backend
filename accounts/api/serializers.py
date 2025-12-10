@@ -69,6 +69,7 @@ class SignupSerializer(serializers.ModelSerializer):
         fields = ('username', 'password', 'email',)
 
     def validate(self, data):
+        # TODO [EASY] 增加验证 username 是不是只由给定的字符集合构成
         if User.objects.filter(username=data.get('username').lower()).exists():
             raise exceptions.ValidationError({
                 'username': 'This username has been occupied.',

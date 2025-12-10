@@ -15,8 +15,8 @@ USER_PROFILE_DETAIL_URL = '/api/profiles/{}/'
 class AccountApiTests(TestCase):
 
     def setUp(self):
-        self.clear_cache()
         # 这个函数会在每个 test function 执行的时候被执行
+        self.clear_cache()
         self.client = APIClient()   # 类似 手动测试时的浏览器
         self.user = self.create_user(
             username='tester',
@@ -32,6 +32,7 @@ class AccountApiTests(TestCase):
             'username': self.user.username,
             'password': 'correct password',
         })  # GET+参数 → 放在 URL 中: /api/account/login/?username=XXX&password=XXX
+
         # 登陆失败, http status code 返回 405 = METHOD_NOT_ALLOWED
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
@@ -62,6 +63,7 @@ class AccountApiTests(TestCase):
         self.assertNotEquals(response.data['user'], None)
         self.assertEqual(response.data['user']['id'], self.user.id)
 
+        # 5. 验证已经登录了
         response = self.client.get(LOGIN_STATUS_URL)
         self.assertEqual(response.data['has_logged_in'], True)
 
@@ -102,8 +104,8 @@ class AccountApiTests(TestCase):
             'password': 'new tester',
             'email': 'not a correct email',
         })
-        # print(response.data)      解析前, 原始响应内容 (bytes) 400错误
-        # print(response.content)   解析后，Python 对象 (dict)  500错误
+        # 400错误 报错时: print(response.data)    解析前, 原始响应内容 (bytes)
+        # 500错误 报错时: print(response.content) 解析后, Python 对象 (dict)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
         # 3 测试密码 太短
@@ -148,7 +150,7 @@ class UserProfileAPITests(TestCase):
         profile_taotao.save()
         url = USER_PROFILE_DETAIL_URL.format(profile_taotao.id)
 
-        # 0. user wrong profile_id
+        # 0. use wrong profile_id
         url_wrong = USER_PROFILE_DETAIL_URL.format(1000)
         response = taotao_client.put(path=url_wrong, data={'nickname': 'new nickname'})
         # 返回 404
@@ -158,7 +160,6 @@ class UserProfileAPITests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         profile_taotao.refresh_from_db()
         self.assertEqual(profile_taotao.nickname, 'old nickname')
-
 
         # 1. anonymous user can not update profile
         response = self.anonymous_client.put(path=url, data={'nickname': 'new nickname'})
@@ -176,7 +177,6 @@ class UserProfileAPITests(TestCase):
         self.assertEqual(response.data['detail'], 'You do not have permission to access this object.')
         profile_taotao.refresh_from_db()
         self.assertEqual(profile_taotao.nickname, 'old nickname')
-
 
         # 2. update nickname
         response = taotao_client.put(path=url, data={'nickname': 'new nickname'})

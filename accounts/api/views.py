@@ -64,6 +64,7 @@ class AccountViewSet(viewsets.ViewSet): # 登陆 注册
     """
     @action(methods=['GET'], detail=False)  # 作用于当前会话的动作: detail=False
     def login_status(self, request):
+        # 查看用户当前的登录状态和具体信息
         data = {
             'has_logged_in': request.user.is_authenticated,
             'ip': request.META.get('REMOTE_ADDR'),
@@ -114,6 +115,7 @@ class AccountViewSet(viewsets.ViewSet): # 登陆 注册
 
     @action(methods=['POST'], detail=False)
     def signup(self, request):
+        # 使用 username, email, password 进行注册
         serializer = SignupSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(data={

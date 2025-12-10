@@ -3,6 +3,8 @@ from datetime import timedelta
 from testing.testcases import TestCase
 from tweets.constants import TweetPhotoStatus
 from tweets.models import TweetPhoto
+from utils.redis_client import RedisClient
+from utils.redis_serializers import DjangoModelSerializer
 from utils.time_helpers import utc_now
 
 
@@ -38,3 +40,17 @@ class TweetTests(TestCase):
         self.assertEqual(photo.user, self.taotao)
         self.assertEqual(photo.status, TweetPhotoStatus.PENDING)
         self.assertEqual(self.tweet.tweetphoto_set.count(), 1)
+
+    def test_cache_tweet_in_redis(self):
+        tweet = self.create_tweet(user=self.taotao)
+        # web server[redis client] <==> redis server
+        conn = RedisClient.get_connection()
+        serialized_data = DjangoModelSerializer.serialize(instance=tweet)
+        conn.set(name=f'tweet:{tweet.id}', value=serialized_data)
+        data = conn.get(f'tweet:not_exists')
+        self.assertEqual(data, None)
+
+        data = conn.get(f'tweet:{tweet.id}')
+        cached_tweet = DjangoModelSerializer.deserialize(serialized_data=data)
+        # 内容相同，但内存地址已经不是同一个了
+        self.assertEqual(tweet, cached_tweet)
