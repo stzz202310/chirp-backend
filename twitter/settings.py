@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
-
+import os
 from pathlib import Path
 import sys
 
@@ -207,8 +207,8 @@ AWS_S3_REGION_NAME = 'us-west-1'
 MEDIA_ROOT = 'media/'   # if TESTING: ... [.gitignore]
 
 # https://docs.djangoproject.com/en/3.1/topics/cache/
-# sudo apt-get install memcached
-# use `pip install python-memcached`
+# memcached 安装方法: apt-get install memcached
+# 然后安装 python 的 memcached 客户端：use `pip install python-memcached`
 # DO NOT `pip install memcache or django-memcached`
 CACHES = {
     'default': {
@@ -234,12 +234,21 @@ CACHES = {
         # 实际存储的 key: 'testing_followings:3'
         
         # Django 在每个测试结束后 只会删除测试数据库
-        # 不会自动清空缓存，因为 cache 是外部系统（memcached）
+        # 不会自动清空缓存，因为 cache 是外部系统（memcached, redis）
         # 所以测试期间写入的 cache key 仍然存在，需要手动清理
         # def setUp(self):
         #   self.clear_cache()
     },
 }
+
+# Redis
+# 安装方法: sudo apt-get install redis
+# 然后安装 redis 的 python 客户端: pip install redis
+REDIS_HOST = '127.0.0.1'
+REDIS_PORT = 6379
+REDIS_DB = 0 if TESTING else 1  # Redis 的数据库: 0, 1, 2, 3, ...
+REDIS_KEY_EXPIRE = 7 * 86400    # in seconds
+
 
 try:
     from twitter.local_settings import *

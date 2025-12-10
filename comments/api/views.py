@@ -70,8 +70,6 @@ class CommentViewSet(viewsets.GenericViewSet):
             'tweet_id': request.data.get('tweet_id'),
             'content': request.data.get('content'),
         }
-        # 注意这里必须要加 'data=' 来指定参数是传给 data 的
-        # 因为默认的第一个参数是 instance
         serializer = CommentSerializerForCreate(data=data)
         if not serializer.is_valid():
             return Response(data={

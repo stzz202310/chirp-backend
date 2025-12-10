@@ -8,6 +8,8 @@ from comments.models import Comment
 from likes.models import Like
 from newsfeeds.models import NewsFeed
 from tweets.models import Tweet
+from utils.redis_client import RedisClient
+
 
 """
 create {comment, tweet, like, newsfeed}
@@ -18,6 +20,7 @@ class TestCase(DjangoTestCase):
 
     def clear_cache(self):
         caches['testing'].clear()
+        RedisClient.clear()
 
     @property
     def anonymous_client(self):
@@ -37,7 +40,9 @@ class TestCase(DjangoTestCase):
             password = 'generic password'
         if email is None:
             email = f'{username}@zhuzhu.com'
-        return User.objects.create_user(    # .create_user()
+        # 不能写成 User.objects.create()
+        # 因为 password 需要被加密, username 和 email 需要进行一些 normalize 处理
+        return User.objects.create_user(
             username=username,
             email=email,
             password=password,

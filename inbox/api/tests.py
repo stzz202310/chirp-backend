@@ -65,20 +65,24 @@ class NotificationApiTests(TestCase):
         response = self.taotao_client.get(unread_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['unread_count'], 2)
+
         # 2. zhuzhu 看到0条未读
         response = self.zhuzhu_client.get(unread_url)
         self.assertEqual(response.data['unread_count'], 0)
 
+        # 3. GET: method not allowed
         mark_url = '/api/notifications/mark-all-as-read/'
         response = self.taotao_client.get(mark_url)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
-        # 3. zhuzhu can not mark taotao's notifications as read
+
+        # 4. zhuzhu can not mark taotao's notifications as read
         response = self.zhuzhu_client.post(mark_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['marked_count'], 0)
         response = self.taotao_client.get(unread_url)
         self.assertEqual(response.data['unread_count'], 2)
-        # 4. taotao can mark his notifications as read
+
+        # 5. taotao can mark his notifications as read
         response = self.taotao_client.post(mark_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['marked_count'], 2)
