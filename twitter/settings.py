@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
-import os
+
 from pathlib import Path
 import sys
 
@@ -39,7 +39,22 @@ INTERNAL_IPS = ['10.0.2.2',]
 """
 
 # Application definition
+"""
+A. 当前架构现状
+    1. 所有模块部署在同一台服务器
+    2. 使用同一个代码库(Git repo)，同一个 runtime
+    3. 模块间可以直接 from xxx import yyy
+    
+B. 拆分为微服务, 每个服务
+    1. 运行在不同 server/container (Docker/K8s), 
+    2. 独立 Git repo, 独立部署发布
+    3. 通过 API（HTTP/GRPC, protobuf/Thrift）互相调用, 代码量显著增加
 
+好处
+    解耦，每个模块独立演化: accounts 在 Twitter、直播、短视频等多个产品都能重用
+    可以独立扩容: tweets QPS 很高 → 单独扩容 tweets-service
+    技术栈可自由选择: accounts 使用 Django; tweets 使用 Go + Redis + Cassandra
+"""
 INSTALLED_APPS = [
     # django default
     'django.contrib.admin',
@@ -217,7 +232,7 @@ CACHES = {
         'TIMEOUT': 86400,   # ttl: time to live 保证数据的一致性
         # 1. 超时
         # 2. 主动删除
-        # 3. 内存不够用，访问频率低的被删除 LRU
+        # 3. 内存不够用，访问频率低的被删除 [LRU: 缓存100条]
 
         # from django.core.cache import cache
         # cache.get('key1')
@@ -228,7 +243,7 @@ CACHES = {
     },
     'testing': {
         'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
-        'LOCATION': '127.0.0.1:11211',  # 本机 | memcached服务器的ip地址
+        'LOCATION': '127.0.0.1:11211',  # 本机 | memcached服务器的ip地址 [AWS: XXX.XXX.com]
         'TIMEOUT': 86400,
         'KEY_PREFIX': 'testing',
         # 实际存储的 key: 'testing_followings:3'

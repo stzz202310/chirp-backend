@@ -11,7 +11,12 @@ class FriendshipPagination(PageNumberPagination):
     # GET /api/friendships/1/followers/?size=10&page=3
     page_size_query_param = 'size'
     # 允许客户端指定的最大 max_page_size 是多少
+    # 保护后端，防止客户一次请求过多的数据，对数据库造成压力，比如 page_size=10000
     max_page_size = 20
+    # 第五页: Table.objects.all()[80:100] [(page_num - 1) * page_size : page_num * page_size]
+    # A. SELECT * FROM `table` LIMIT 20 OFFSET 80
+    # B. SELECT * FROM `table`  + return queryset[8:100]
+    # 选 A; lazy loading, Table.objects.filter(...).filter(...) 会整合为一条 SQL 语句
 
     def get_paginated_response(self, data):
         # default: [count, next, previous, results]

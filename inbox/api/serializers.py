@@ -9,6 +9,8 @@ class NotificationSerializer(serializers.ModelSerializer):
     verb = "liked your tweet {target}"
     前端：渲染
     后端：提供数据；同一个api接口，支持不同的前端
+
+    TODO [HARD]: 展示具体的信息 instead of [content_type, object_id]
     """
     class Meta:
         model = Notification

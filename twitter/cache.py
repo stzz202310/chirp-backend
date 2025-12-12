@@ -13,10 +13,9 @@ Lease-get
 """
 memcached: key-value storage [key, val 都是字符串]
 
-Friendships: Followings
-User
-UserProfile
-Tweet
+Followings      'followings:{user_id}' :    set(user_ids)  set(instances)
+UserProfile     'userprofile:{user_id}':    user_profile   instance
+User | Tweet    'model_class:{object_id}':  instance
 
 key is 'followings:3'
 val is set {1, 2, 5}
@@ -30,7 +29,8 @@ zhuzhu: 'followings:3', 关注了 {1, 2, 5}
 所以 cache 更新
 1. ❌ 直接更新缓存 [高并发时，容易出错]
 2. ✅ 让缓存失效 [也可能出错(读的时候，数据库更新了)，概率较低]
-web, memcached 在不同的机器上，如果加锁 只能加分布式锁，大大降低访问的效率 [cache就没有意义了]
+3. ✅ redis
+web server, memcached 在不同的机器上，如果加锁 只能加分布式锁，大大降低访问的效率 [cache就没有意义了]
 不加锁 一定会产生数据的不一致
 
 FOLLOWINGS_PATTERN:
@@ -44,4 +44,5 @@ USER_PROFILE_PATTERN = 'userprofile:{user_id}'  # val: {user_id}用户的user pr
 
 """
 redis: key-value storage
+Tweet   'user_id':  这个用户发的帖子 [tweets: list of tweets]
 """

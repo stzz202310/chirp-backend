@@ -1,5 +1,5 @@
 class TweetPhotoStatus:
-    PENDING = 0
+    PENDING = 0     # 用数字，不要用字符串: 方便修改显示值
     APPROVED = 1
     REJECTED = 2
 

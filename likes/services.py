@@ -11,7 +11,7 @@ class LikesService(object):
         target: tweet OR comment
 
         has_likes 需要 user，target [仅 Like Model 的信息不够，所以不放在 models.py]
-        TODO [HARD]: comment x 10.has_liked
+        TODO [HARD]: [comment x 10].has_liked
         Query 1. object_ids = [...]
         Query 2. Like.objects.filter(object_id__in=object_ids)
         """

@@ -22,7 +22,8 @@ class UserService:
         # 1. User.profile = property(get_profile)
         # 2. def get_profile(user):
         #       profile = UserService.get_profile_through_cache(user_id=user.id)
-        # 根据 1 和 2，user 一定是存在的，不需要额外的检查
+        # 3. SignupSerializer.create: user.profile
+        # 根据 1, 2 和 3，user 一定是存在的，不需要额外的检查
         profile, _ = UserProfile.objects.get_or_create(user_id=user_id)
         cache.set(key, profile)
         return profile

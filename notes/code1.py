@@ -130,7 +130,7 @@ class Serializer(serializers.ModelSerializer):
     user = UserSerializerForFriendship(source='from_user')          # instance = friendship.from_user
     comments = CommentSerializer(source='comment_set', many=True)   # queryset = tweet.comment_set
 
-    class Meta: model = User    fields = ('user', 'comments',)
+    class Meta: model = User    fields = ('user', 'comments',)      # 白名单 返回给前端 | 展示部分信息
 
     def __init__(self, instance=None, data=empty, **kwargs):
     

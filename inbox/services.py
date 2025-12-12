@@ -6,11 +6,13 @@ from tweets.models import Tweet
 
 
 """
-方式 1
-监听 signal A ==> task 1 
-监听 signal A ==> task 2
-监听 signal A ==> task 3
-task 1, 2, 3 在不同地方，同时进行
+方式 1 订阅模式 pre_delete, post_save
+task 1 监听 signal A [signal A 代表 事件X]
+task 2 监听 signal A
+task 3 监听 signal A
+事件 X 发生 => 发送 signal A => 触发 task 1, 2, 3 [用户注册 => 手机验证，发送欢迎邮件, ...]
+1. task 1, 2, 3 之间不能有先后依赖关系
+2. task 1, 2, 3 在不同地方，同时进行 [黑名单]
 
 方式 2 [推荐，白名单 触发]
 Service A:
