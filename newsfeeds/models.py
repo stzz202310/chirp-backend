@@ -1,6 +1,8 @@
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models.signals import post_save
 
+from newsfeeds.listeners import push_newsfeed_to_cache
 from tweets.models import Tweet
 from utils.memcached_helper import MemcachedHelper
 
@@ -27,3 +29,6 @@ class NewsFeed(models.Model):
             model_class=Tweet,
             object_id=self.tweet_id,
         )
+
+
+post_save.connect(receiver=push_newsfeed_to_cache, sender=NewsFeed)
