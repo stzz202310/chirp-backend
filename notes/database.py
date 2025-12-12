@@ -28,10 +28,12 @@ print(qs.query)
 
 4. N + 1 Queries: 1个 API request 对应 常数级别的 DB queries [10次]
     例子: newsfeeds.services｜friendships.services | comments.api.views
+    例子: utils.redis_helper| 
     ❌for 循环 {Query 多次查找}, ✅prefetch_related
     ❌for 循环 {Query 多次插入}, ✅bulk_create
+    ❌for 循环 {redis 多次插入}, ✅conn.rpush(key, *serialized_list)
     
-    web (client) <-> db (server) 不同机器 需要数据传输和校验
+    web (client) <-> db|redis|memcached (server) 不同机器 需要数据传输和校验
     假设 通讯时间 10ms，SQL操作时间 1ms
     通讯十次 每次插入一条[错误] = (10 + 1) * 10 = 110 ms
     通讯一次 每次插入十条[正确] = 10 + 1 * 10 = 20 ms

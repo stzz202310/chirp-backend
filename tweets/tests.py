@@ -3,6 +3,8 @@ from datetime import timedelta
 from testing.testcases import TestCase
 from tweets.constants import TweetPhotoStatus
 from tweets.models import TweetPhoto
+from tweets.services import TweetService
+from twitter.cache import USER_TWEETS_PATTERN
 from utils.redis_client import RedisClient
 from utils.redis_serializers import DjangoModelSerializer
 from utils.time_helpers import utc_now
@@ -54,3 +56,50 @@ class TweetTests(TestCase):
         cached_tweet = DjangoModelSerializer.deserialize(serialized_data=data)
         # 内容相同，但内存地址已经不是同一个了
         self.assertEqual(tweet, cached_tweet)
+
+
+class TweetServiceTests(TestCase):
+
+    def setUp(self):
+        self.clear_cache()
+        self.taotao = self.create_user(username='taotao')
+
+    def test_get_user_tweets(self):
+        tweet_ids = []
+        for i in range(3):
+            tweet = self.create_tweet(user=self.taotao, content=f'tweet{i}')
+            tweet_ids.append(tweet.id)
+        tweet_ids = tweet_ids[::-1]
+
+        RedisClient.clear()
+        conn = RedisClient.get_connection()
+
+        # 1. cache miss
+        tweets = TweetService.get_cached_tweets(user_id=self.taotao.id)
+        self.assertEqual([tweet.id for tweet in tweets], tweet_ids)
+
+        # 2. cache hit
+        tweets = TweetService.get_cached_tweets(user_id=self.taotao.id)
+        self.assertEqual([tweet.id for tweet in tweets], tweet_ids)
+
+        # 3. cache updated
+        new_tweet = self.create_tweet(user=self.taotao, content='new tweet')
+        tweets = TweetService.get_cached_tweets(user_id=self.taotao.id)
+        tweet_ids.insert(0, new_tweet.id)
+        self.assertEqual([tweet.id for tweet in tweets], tweet_ids)
+
+    def test_create_new_tweet_before_get_cached_tweets(self):
+        tweet1 = self.create_tweet(user=self.taotao, content='tweet1')
+
+        RedisClient.clear()
+        conn = RedisClient.get_connection()
+
+        key = USER_TWEETS_PATTERN.format(user_id=self.taotao.id)
+        self.assertEqual(conn.exists(key), False)
+        tweet2 = self.create_tweet(user=self.taotao, content='tweet2')
+        self.assertEqual(conn.exists(key), True)
+
+        tweets = TweetService.get_cached_tweets(user_id=self.taotao.id)
+        self.assertEqual(
+            [tweet.id for tweet in tweets],
+            [tweet2.id, tweet1.id])

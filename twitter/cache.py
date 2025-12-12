@@ -42,7 +42,9 @@ FOLLOWINGS_PATTERN = 'followings:{user_id}'     # val: {user_id}用户的关注�
 USER_PROFILE_PATTERN = 'userprofile:{user_id}'  # val: {user_id}用户的user profile
 # user_id (not UserProfile_id) 是很多表单的外键
 
+
 """
 redis: key-value storage
-Tweet   'user_id':  这个用户发的帖子 [tweets: list of tweets]
+Tweet   'user_tweets:{user_id}':  这个用户发的帖子(list of tweets in JSON)
 """
+USER_TWEETS_PATTERN = 'user_tweets:{user_id}'

@@ -262,7 +262,7 @@ CACHES = {
 REDIS_HOST = '127.0.0.1'
 REDIS_PORT = 6379
 REDIS_DB = 0 if TESTING else 1  # Redis 的数据库: 0, 1, 2, 3, ...
-REDIS_KEY_EXPIRE = 7 * 86400    # in seconds
+REDIS_KEY_EXPIRE_TIME = 7 * 86400    # in seconds
 
 
 try:

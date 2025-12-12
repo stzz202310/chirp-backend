@@ -1,3 +1,4 @@
+from dateutil import parser
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
@@ -14,7 +15,41 @@ class EndlessPagination(PageNumberPagination):
     def to_html(self):  # 用于 浏览器模式下分页 HTML 展示 [但现实里 DRF 很少用它]
         pass            # 不需要 HTML 输出, 只输出 JSON
 
+    def paginate_ordered_list(self, reverse_ordered_list, request):
+        # reverse_ordered_list: 保存在 cache 中，一般不会太大，可以 for 循环
+        # reverse_ordered_list: created_at 倒序排列 [.order_by('-created_at')]
+        if 'created_at__gt' in request.query_params:
+            created_at__gt = parser.isoparse(request.query_params['created_at__gt'])
+            objects = []
+            for obj in reverse_ordered_list:
+                if obj.created_at > created_at__gt:
+                    objects.append(obj)
+                else:
+                    break
+            self.has_next_page = False
+            return objects
+
+        index = 0
+        if 'created_at__lt' in request.query_params:
+            created_at__lt = parser.isoparse(request.query_params['created_at__lt'])
+            for index, obj in enumerate(reverse_ordered_list):
+                if obj.created_at < created_at__lt:
+                    break
+            else:
+                # 没找到任何满足条件的 objects，返回空数组
+                # 注意这个 else 对应的是 for
+
+                # lst = []
+                # lst[10]      ❌ IndexError
+                # lst[10:20]   ✅ 返回 []
+                reverse_ordered_list = []
+        self.has_next_page = len(reverse_ordered_list) > index + self.page_size
+        return reverse_ordered_list[index : index + self.page_size] # 左闭右开
+
     def paginate_queryset(self, queryset, request, view=None):
+        if type(queryset) == list:  # redis: 返回 list
+            return self.paginate_ordered_list(queryset, request)
+
         """
         Endless Pagination
         如何不依赖于 中心化的数据库节点，实现一个分布式的全局递增的 ID生成算法？
@@ -30,7 +65,7 @@ class EndlessPagination(PageNumberPagination):
             # 为了简单起见，下拉刷新不做翻页机制，直接加载所有更新的数据
             # 因为如果数据很久没有更新的话，不会采用下拉刷新的方式进行更新，而是重新加载最新的数据
             # TODO [HARD] 三年后刷新，新帖子太多: 仅显示最新的20条, 并且不要和[之前的帖子]拼到一起
-            # TODO [HARD] 如何处理翻页结果中的无权限内容? [白名单|黑名单: cache 方便查找]
+            # TODO [HARD] 如何处理翻页结果中的无权限内容? [白名单|黑名单|已删除的帖子: cache 方便查找]
             #   先queryset，再筛选: 如果直接通过 queryset 筛选，效率会非常低
             #   例子: 用户A 查看 用户B的帖子 page_size=3
             #   第一次得到 帖子[9, 8, 7], 用户A没有权限看9
