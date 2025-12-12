@@ -12,6 +12,10 @@ class RedisHelper:
 
         serialized_list = []
         for obj in objects:
+            # serialized_data = DjangoModelSerializer(数据库的原始数据),
+            # serialized_data: 没有经过 ModelSerializer
+            # b'[{ "model": "newsfeeds.newsfeed", "pk": 15,
+            #   "fields": {"user": 3, "tweet": 14, "created_at": "2025-12-12T19:06:45.300033Z"}}]'
             serialized_data = DjangoModelSerializer.serialize(instance=obj)
             serialized_list.append(serialized_data)
 

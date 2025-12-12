@@ -45,6 +45,8 @@ USER_PROFILE_PATTERN = 'userprofile:{user_id}'  # val: {user_id}用户的user pr
 
 """
 redis: key-value storage
-Tweet   'user_tweets:{user_id}':  这个用户发的帖子(list of tweets in JSON)
+Tweet    'user_tweets:{user_id}':    这个用户发的帖子   (list of tweets in JSON)
+Newsfeed 'user_newsfeeds:{user_id}': 这个用户的新鲜事列表(list of newsfeeds in JSON)
 """
 USER_TWEETS_PATTERN = 'user_tweets:{user_id}'
+USER_NEWSFEEDS_PATTERN = 'user_newsfeeds:{user_id}'

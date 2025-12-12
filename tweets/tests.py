@@ -71,10 +71,9 @@ class TweetServiceTests(TestCase):
             tweet_ids.append(tweet.id)
         tweet_ids = tweet_ids[::-1]
 
+        # 1. cache miss
         RedisClient.clear()
         conn = RedisClient.get_connection()
-
-        # 1. cache miss
         tweets = TweetService.get_cached_tweets(user_id=self.taotao.id)
         self.assertEqual([tweet.id for tweet in tweets], tweet_ids)
 
@@ -91,11 +90,13 @@ class TweetServiceTests(TestCase):
     def test_create_new_tweet_before_get_cached_tweets(self):
         tweet1 = self.create_tweet(user=self.taotao, content='tweet1')
 
+        # 1. cache miss
         RedisClient.clear()
         conn = RedisClient.get_connection()
-
         key = USER_TWEETS_PATTERN.format(user_id=self.taotao.id)
         self.assertEqual(conn.exists(key), False)
+
+        # 2. cache hit
         tweet2 = self.create_tweet(user=self.taotao, content='tweet2')
         self.assertEqual(conn.exists(key), True)
 
