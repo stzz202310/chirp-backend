@@ -12,6 +12,8 @@ class MemcachedHelper:
 
     @classmethod
     def get_object_through_cache(cls, model_class, object_id):
+        # cache: 优化读多写少的情况
+        # hit rate 缓存命中率 = hit/(hit + miss); user表单的命中率 98%
         key = cls.get_key(model_class=model_class, object_id=object_id)
         # 1. read from cache first
         obj = cache.get(key)

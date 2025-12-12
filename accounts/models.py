@@ -43,24 +43,28 @@ def get_profile(user):
     setattr(user, '_cached_user_profile', profile)
     return profile
 
-
-# 给 User Model 增加了一个 profile 的 property方法｜属性 用于快捷访问, 类似于
-# class User:
-#   @property
-#   def profile(self):
-User.profile = property(get_profile)
-# Python 在解释执行模块（.py 文件）时，从上到下运行代码
-# 遇到 User.profile = property(get_profile) 就会立即执行
-
 """
-方法 2: 
+User Model 是 django 自带的库, 无法直接编辑
+方法 1: instance level 的 cache [instance.__dict__]
+通过 User.profile = property(get_profile) 
+给 User 增加了 user.profile 的 property 属性 用于快捷访问, 类似于
+class User:
+    @property
+    def profile(self):
+
+方法 2:
 class UserService:
     @classmethod
     def get_profile(cls, user):
         return UserProfile.objects.get(user=user)
-
 profile = UserService.get_profile(user=user)
+
+
+Python 在解释执行模块（.py 文件）时，从上到下运行代码
+遇到 User.profile = property(get_profile) 就会立即执行
 """
+User.profile = property(get_profile)
+
 
 # hook up with listeners to invalidate cache
 pre_delete.connect(receiver=invalidate_object_cache, sender=User)  # 删除

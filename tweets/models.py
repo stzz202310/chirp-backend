@@ -11,6 +11,7 @@ from utils.time_helpers import utc_now
 
 
 class Tweet(models.Model):
+    # tweet_id: 不能默认是连续的，因为可能会删除帖子
     user = models.ForeignKey(   # user.tweet_set 等价于 Tweet.objects.filter(user=user)
         User,
         on_delete=models.SET_NULL,
@@ -30,6 +31,8 @@ class Tweet(models.Model):
 
     @property
     def hours_to_now(self):
+        # 不需要传额外参数的时候，可以用 @propert
+
         # 并不是数据库表中的真实字段 tweet.hours_to_now
         # datetime.now 不带时区信息，需要加上 utc 的时区信息
         return (utc_now() - self.created_at).seconds // 3600

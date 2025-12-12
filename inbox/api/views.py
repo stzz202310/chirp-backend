@@ -56,6 +56,10 @@ class NotificationViewSet(
         # .filter(recipient=self.request.user).filter(unread=True)
         # index_together = ('recipient', 'unread')
         # ⚠️.filter().filter(): 需要建立 联合索引
+
+        # ❌ unread = models.BooleanField(db_index=True) 不需要 索引
+        # 1. 没有查询需求: 多一个索引，多一张表单
+        # 2. unread[true, false] 选项少，建索引没有意义
         updated_count = self.get_queryset().filter(unread=True).update(unread=False)
         return Response(
             data={'marked_count': updated_count},

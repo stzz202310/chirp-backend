@@ -9,6 +9,9 @@ from utils.paginations import EndlessPagination
 class NewsFeedViewSet(viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = EndlessPagination
+    # TODO [HARD] NewsFeed 的界面一段时间之后会提示你有 N条新的NewsFeed，这个功能是怎么实现的？PULL(轮询)
+    #   前端每隔 30 秒调用 /api/newsfeed/?id__gt=<最新ID>&only-count=True
+    #   后端返回 数量, 前端显示 "你有 N 条新内容"
 
     def get_queryset(self):
         # 自定义 queryset，因为 newsfeed 的查看是有权限的

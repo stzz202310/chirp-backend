@@ -49,7 +49,6 @@ def required_params(method='GET', params=None):
     return decorator    # return decorator() Python 会直接执行 decorator()，但是你还没传 view_func 进去 [❌报错]
 
 """
-
 不带参数的装饰器 两层  view_func = (decorator 函数)(view_func)
 带参数的装饰器   三层  view_func = (required_params(method='GET', params=None))(view_func)
 1. 最外层 参数              def required_params(method='GET', params=None)
@@ -61,8 +60,7 @@ def required_params(method='GET', params=None):
         @wraps(view_func)
         def _wrapped_view(instance, request, *args, **kwargs):
             # 检查 是否有 missing_params
-            return view_func(instance, request, *args, **kwargs)
-        return _wrapped_view
-    return decorator
-
+            return view_func(instance, request, *args, **kwargs)    运行 被装饰函数
+        return _wrapped_view    懒惰加载
+    return decorator            动态生成 装饰器
 """

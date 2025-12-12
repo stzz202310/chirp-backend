@@ -36,7 +36,12 @@ print(qs.query)
     通讯十次 每次插入一条[错误] = (10 + 1) * 10 = 110 ms
     通讯一次 每次插入十条[正确] = 10 + 1 * 10 = 20 ms
 
-5. queryset.filter().fiter() 有多个筛选条件时，一定要检查是否有 联合索引 ⚠️
+5. Table.objects.filter(...).filter(...) 有多个筛选条件时，一定要检查是否有 联合索引 ⚠️
+   Table.objects.filter(...).filter(...) 会整合为一条 SQL 语句
+   
+   queryset = Tweet.objects.filter(...)[:21]
+   A. if len(queryset) == 21:     ✅
+   B. if queryset.count() == 21:  ❌ 会产生一条query语句, SELECT Count(*) FROM `tweets_tweet` WHERE ...
 
 ==========================================================================================
 
