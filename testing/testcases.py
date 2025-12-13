@@ -5,6 +5,7 @@ from django.test import TestCase as DjangoTestCase
 from rest_framework.test import APIClient
 
 from comments.models import Comment
+from friendships.models import Friendship
 from likes.models import Like
 from newsfeeds.models import NewsFeed
 from tweets.models import Tweet
@@ -63,6 +64,9 @@ class TestCase(DjangoTestCase):
         client = APIClient()
         client.force_authenticate(user=user)
         return user, client
+
+    def create_friendship(self, from_user, to_user):
+        return Friendship.objects.create(from_user=from_user, to_user=to_user)
 
     def create_tweet(self, user, content=None):
         if content is None:
