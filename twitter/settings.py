@@ -261,8 +261,9 @@ CACHES = {
 # 然后安装 redis 的 python 客户端: pip install redis
 REDIS_HOST = '127.0.0.1'
 REDIS_PORT = 6379
-REDIS_DB = 0 if TESTING else 1  # Redis 的数据库: 0, 1, 2, 3, ...
-REDIS_KEY_EXPIRE_TIME = 7 * 86400    # in seconds
+REDIS_DB = 0 if TESTING else 1      # Redis 的数据库: 0, 1, 2, 3, ...
+REDIS_KEY_EXPIRE_TIME = 7 * 86400   # in seconds
+REDIS_LIST_LENGTH_LIMIT = 200 if not TESTING else 20    # 限制缓存长度，减少内存压力
 
 
 try:

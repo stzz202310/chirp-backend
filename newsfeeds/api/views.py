@@ -2,6 +2,7 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
 from newsfeeds.api.serializers import NewsFeedSerializer
+from newsfeeds.models import NewsFeed
 from newsfeeds.services import NewsFeedService
 from utils.paginations import EndlessPagination
 
@@ -13,16 +14,23 @@ class NewsFeedViewSet(viewsets.GenericViewSet):
     #   前端每隔 30 秒调用 /api/newsfeed/?id__gt=<最新ID>&only-count=True
     #   后端返回 数量, 前端显示 "你有 N 条新内容"
 
-    # def get_queryset(self):
-    #     # 自定义 queryset，因为 newsfeed 的查看是有权限的
-    #     # 只能看 user=当前登录用户[request.user] 的 newsfeed
-    #     # 也可以是 self.request.user.newsfeed_set.all()
-    #     # 但是一般最好还是按照 NewsFeed.objects.filter 的方式写，更清晰直观
-    #     return NewsFeed.objects.filter(user=self.request.user)
+    def get_queryset(self):
+        # 自定义 queryset，因为 newsfeed 的查看是有权限的
+        # 只能看 user=当前登录用户[request.user] 的 newsfeed
+        # 也可以是 self.request.user.newsfeed_set.all()
+        # 但是一般最好还是按照 NewsFeed.objects.filter 的方式写，更清晰直观
+        return NewsFeed.objects.filter(user=self.request.user)
 
     def list(self, request):
-        newsfeeds = NewsFeedService.get_cached_newsfeeds(user_id=request.user.id)
-        page = self.paginate_queryset(queryset=newsfeeds)
+        cached_newsfeeds = NewsFeedService.get_cached_newsfeeds(user_id=request.user.id)
+        # 自定义方法，需要通过 self.paginator 调用
+        page = self.paginator.paginate_cached_list(
+            cached_list=cached_newsfeeds,
+            request=request,
+        )
+        if page is None: # 可能存在[数据库里没有 load 在 cache 里的数据], 需要直接去数据库查询
+            queryset = self.get_queryset()
+            page = self.paginate_queryset(queryset=queryset)
 
         serializer = NewsFeedSerializer(
             instance=page,
