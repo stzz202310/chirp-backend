@@ -226,3 +226,29 @@ class LikeApiTests(TestCase):
         self.assertEqual(len(response.data['likes']), 2)
         self.assertEqual(response.data['likes'][0]['user']['id'], self.taotao.id)
         self.assertEqual(response.data['likes'][1]['user']['id'], self.zhuzhu.id)
+
+    def test_likes_count(self):
+        tweet = self.create_tweet(user=self.taotao)
+        data = {'content_type': 'tweet', 'object_id': tweet.id}
+        tweet_url = TWEET_DETAIL_API.format(tweet.id)
+
+        # 1. 点赞 + 1
+        self.taotao_client.post(path=LIKE_BASE_URL, data=data)
+        response = self.taotao_client.get(path=tweet_url)
+        self.assertEqual(response.data['likes_count'], 1)
+        tweet.refresh_from_db()
+        self.assertEqual(tweet.likes_count, 1)
+
+        # 2. 点赞 + 2
+        self.zhuzhu_client.post(path=LIKE_BASE_URL, data=data)
+        response = self.taotao_client.get(path=tweet_url)
+        self.assertEqual(response.data['likes_count'], 2)
+        tweet.refresh_from_db()
+        self.assertEqual(tweet.likes_count, 2)
+
+        # 3. 取消赞
+        self.taotao_client.post(path=LIKE_CANCEL_URL, data=data)
+        response = self.zhuzhu_client.get(path=tweet_url)
+        self.assertEqual(response.data['likes_count'], 1)
+        tweet.refresh_from_db()
+        self.assertEqual(tweet.likes_count, 1)

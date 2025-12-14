@@ -12,6 +12,7 @@ from tweets.models import Tweet
 from tweets.services import TweetService
 from utils.decorators import required_params
 from utils.paginations import EndlessPagination
+from utils.memcached_helper import MemcachedHelper
 
 
 class TweetViewSet(viewsets.GenericViewSet):
@@ -56,7 +57,12 @@ class TweetViewSet(viewsets.GenericViewSet):
     def retrieve(self, request, *args, **kwargs):
         # TODO [EASY]: 通过某个 query 参数 with_all_comments     来决定是否需要带上所有 comments
         # TODO [EASY]: 通过某个 query 参数 with_preview_comments 来决定是否需要带上前三条 comments
+
         tweet = self.get_object()
+        # tweet = MemcachedHelper.get_object_through_cache(
+        #     model_class=Tweet,
+        #     object_id=int(kwargs.get('pk')),
+        # ) TODO [Myself] Add memcached {tweet_id:tweet_obj}
         serializer = TweetSerializerForDetail(
             instance=tweet,
             context={'request': request},

@@ -1,7 +1,9 @@
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.db.models.signals import post_save, pre_delete
 
+from comments.listeners import incr_comments_count, decr_comments_count
 from likes.models import Like
 from tweets.models import Tweet
 from utils.memcached_helper import MemcachedHelper
@@ -43,3 +45,7 @@ class Comment(models.Model):
             model_class=User,
             object_id=self.user_id,
         )
+
+
+pre_delete.connect(receiver=decr_comments_count, sender=Comment)
+post_save.connect(receiver=incr_comments_count, sender=Comment)

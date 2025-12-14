@@ -22,6 +22,12 @@ class Tweet(models.Model):
     content = models.CharField(max_length=255)  # 'abcde\0': \0表示字符串的结束
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # ⚠️ 新增的 field 一定要设置 null=True，否则 default = 0 会遍历整个表单去设置
+    # 导致 Migration 过程非常慢，从而把整张表单锁死，正常用户无法创建新的 tweets
+    # 之前数据的 likes_count 怎么办? 回填脚本: 遍历整个表单，把数据一个个分批填上 [不会锁死表单]
+    likes_count = models.IntegerField(default=0, null=True)
+    comments_count = models.IntegerField(default=0, null=True)
+
     class Meta:
         index_together = (('user', 'created_at'),) # show index from `tweets_tweet`
         ordering = ('user', '-created_at',) # 不会对数据库产生影响，只会影响 QuerySet
@@ -102,3 +108,4 @@ class TweetPhoto(models.Model):
 post_save.connect(receiver=invalidate_object_cache, sender=Tweet)
 pre_delete.connect(receiver=invalidate_object_cache, sender=Tweet)
 post_save.connect(receiver=push_tweet_to_cache, sender=Tweet)
+# TODO [Myself] 增加[删除Tweet的API接口], 并思考如何处理 redis{user_id:[tweets]}?
