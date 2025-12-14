@@ -43,10 +43,36 @@ class TweetSerializer(serializers.ModelSerializer):
         )
 
     def get_likes_count(self, obj):
-        return obj.like_set.count()     # like_set 自定义
+        import random
+        # if random.randint(0, 1000) == 0:  # [左闭右闭]
+        #     likes_count = obj.like_set.count()
+        #     if obj.likes_count != likes_count:
+        #         obj.likes_count = likes_count
+        #         obj.save()
+        #     return likes_count
+        # return obj.likes_count
+        """ 
+        Like  Table: return obj.like_set.count()    
+        Tweet Table: return obj.likes_count
+        
+        Single Source of Truth (SSOT)
+        Multi Sources of Truth (MSOT): 数据不一致
+        1. ignore: 数据不敏感，准确性不重要
+        2. Timeout: 定时从数据库回填
+        
+        GET /api/tweets/1/ => response.data['likes_count'] 
+        ✅ def get_likes_count() 
+        ❌ 模型字段 tweet.likes_count
+        
+        obj.likes_count = likes_count;  obj.save()   ❌ 不需要 obj.refresh_from_db()
+        Tweet.objects.filter(...).update(...)        ✅ 需要 obj.refresh_from_db()
+        """
+        return obj.like_set.count() # like_set 自定义
+        # return obj.likes_count    # ❌ 缓存未更新，obj未更新，✅ 数据库更新了
 
     def get_comments_count(self, obj):
         return obj.comment_set.count()  # comment_set django定义 [tweet as fk in `Comment`]
+        # return obj.comments_count
 
     def get_photo_urls(self, obj):
         photo_urls = []

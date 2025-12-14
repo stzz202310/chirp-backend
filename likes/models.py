@@ -2,7 +2,9 @@ from django.contrib.auth.models import User
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.db.models.signals import pre_delete, post_save
 
+from likes.listeners import incr_likes_count, decr_likes_count
 from utils.memcached_helper import MemcachedHelper
 
 
@@ -55,3 +57,7 @@ class Like(models.Model):
             object_id=self.user_id,
             # 千万不要 self.user.id: 会产生数据库的查询，白缓存了
         )
+
+
+pre_delete.connect(receiver=decr_likes_count, sender=Like)
+post_save.connect(receiver=incr_likes_count, sender=Like)
