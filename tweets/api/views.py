@@ -40,8 +40,16 @@ class TweetViewSet(viewsets.GenericViewSet):
             # order by created_at desc
             # 这句 SQL 查询会用到 user 和 created_at 的联合索引
             # 单纯的 user 索引是不够的
-            queryset = self.queryset.filter(user_id=user_id).order_by('-created_at')
-            # queryset = Tweet.objects.filter(user_id=user_id).order_by('-created_at')
+
+            # ✅ queryset.prefetch_related [2 queries]
+            # ❌ queryset.select_related   [join]
+            # ❌ queryset                  [n + 1 queries]
+            # user = Serializer(source='cached_user') 展示 users [many=True] 的详细信息
+            # source='cached_user' 可以从缓存读取 user, 所以不加 prefetch_related 也行
+            queryset = self.queryset.filter(user_id=user_id)\
+                .prefetch_related('user')\
+                .order_by('-created_at')
+            # queryset = Tweet.objects.filter(...)
             page = self.paginate_queryset(queryset=queryset) # 分页
 
         # many = True, return list of dict

@@ -47,9 +47,12 @@ class CommentViewSet(viewsets.GenericViewSet):
         # tweet_id = request.query_params.get('tweet_id')
         # comments = Comment.objects.filter(tweet_id=tweet_id)
         queryset = self.get_queryset()
-        # user = UserSerializerForComment() 展示 users [many=True] 的详细信息
-        # 1. queryset.select_related [join]
-        # 2. queryset.user [n + 1 queries]
+
+        # ✅ queryset.prefetch_related [2 queries]
+        # ❌ queryset.select_related   [join]
+        # ❌ queryset                  [n + 1 queries]
+        # user = Serializer(source='cached_user') 展示 users [many=True] 的详细信息
+        # source='cached_user' 可以从缓存读取 user, 所以不加 prefetch_related 也行
         comments = self.filter_queryset(queryset=queryset)\
             .prefetch_related('user')\
             .order_by('created_at')

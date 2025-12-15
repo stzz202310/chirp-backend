@@ -1,3 +1,6 @@
+from utils.redis_helper import RedisHelper
+
+
 def incr_likes_count(sender, instance, created, **kwargs):
     from django.db.models import F
     from tweets.models import Tweet
@@ -48,7 +51,12 @@ def incr_likes_count(sender, instance, created, **kwargs):
     Tweet.objects.filter(pk=instance.object_id).update(likes_count=F('likes_count') + 1)
     # ❌ 缓存未更新，obj未更新，✅ 数据库更新了
     # ❌ 不会触发任何的 model signal, 所以 redis{user_id:[tweets]}, memcached{tweet_id:tweet_obj} 不会更新
-    # ❌ 不推荐通过触发 model signal, 删除缓存; 否则每次点赞|取消赞，都会删除缓存 => cache miss => read from DB
+    # ❌ 不推荐通过触发 model signal, 删除缓存; 否则每次点赞|取消赞，都会删除tweet缓存 => cache miss => read from DB
+    # ✅ 把 likes_count[仅有+1和-1操作] 分离出来，单独保存在 cache 中
+    tweet = instance.content_object
+    RedisHelper.incr_count(obj=tweet, attr='likes_count')
+    # ✅ 数据库更新        Tweet.objects.filter().update(F)
+    # ✅ 缓存更新, obj更新 RedisHelper.incr_count
 
 
 def decr_likes_count(sender, instance, **kwargs):
@@ -62,3 +70,4 @@ def decr_likes_count(sender, instance, **kwargs):
 
     # handle tweet likes cancel
     Tweet.objects.filter(pk=instance.object_id).update(likes_count=F('likes_count') - 1)
+    RedisHelper.decr_count(obj=instance.content_object, attr='likes_count')

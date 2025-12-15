@@ -16,13 +16,8 @@ class CommentAPITest(TestCase):
 
     def setUp(self):
         self.clear_cache()
-        self.taotao = self.create_user('taotao')
-        self.taotao_client = APIClient()
-        self.taotao_client.force_authenticate(user=self.taotao)
-
-        self.zhuzhu = self.create_user('zhuzhu')
-        self.zhuzhu_client = APIClient()
-        self.zhuzhu_client.force_authenticate(user=self.zhuzhu)
+        self.taotao, self.taotao_client = self.create_user_and_client(username='taotao')
+        self.zhuzhu, self.zhuzhu_client = self.create_user_and_client(username='zhuzhu')
 
         self.tweet_taotao = self.create_tweet(user=self.taotao)
         self.tweet_zhuzhu = self.create_tweet(user=self.zhuzhu)
@@ -178,3 +173,46 @@ class CommentAPITest(TestCase):
         response = self.zhuzhu_client.get(path=NEWSFEED_LIST_API)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['results'][0]['tweet']['comments_count'], 2)
+
+    def test_comments_count_with_cache(self):
+        # 1. 初始化，0条评论
+        tweet_url = TWEET_DETAIL_API.format(self.tweet_taotao.id)
+        response = self.taotao_client.get(path=tweet_url)
+        self.assertEqual(self.tweet_taotao.comments_count, 0)
+        self.assertEqual(response.data['comments_count'], 0)
+
+        # 2. 增加 2条评论
+        data = {'tweet_id': self.tweet_taotao.id, 'content': 'a comment'}
+        for i in range(2):
+            _, client = self.create_user_and_client(username=f'user{i}')
+            response = client.post(path=COMMENT_LIST_API, data=data)
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+            response = client.get(path=tweet_url)
+            self.assertEqual(response.data['comments_count'], i + 1)
+            self.tweet_taotao.refresh_from_db()
+            self.assertEqual(self.tweet_taotao.comments_count, i + 1)
+
+        # 3. 增加 第3条评论
+        comment_data = self.zhuzhu_client.post(path=COMMENT_LIST_API, data=data).data
+        response = self.zhuzhu_client.get(path=tweet_url)
+        self.assertEqual(response.data['comments_count'], 3)
+        self.tweet_taotao.refresh_from_db()
+        self.assertEqual(self.tweet_taotao.comments_count, 3)
+
+        # 4. update comment shouldn't update ['comments_count']
+        #    if not created: return
+        comment_url = COMMENT_DETAIL_API.format(comment_data['id'])
+        response = self.zhuzhu_client.put(path=comment_url, data={'content': 'updated'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.zhuzhu_client.get(path=tweet_url)
+        self.assertEqual(response.data['comments_count'], 3)
+        self.tweet_taotao.refresh_from_db()
+        self.assertEqual(self.tweet_taotao.comments_count, 3)
+
+        # 5. delete a comment will update ['comments_count']
+        response = self.zhuzhu_client.delete(path=comment_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.taotao_client.get(path=tweet_url)
+        self.assertEqual(response.data['comments_count'], 2)
+        self.tweet_taotao.refresh_from_db()
+        self.assertEqual(self.tweet_taotao.comments_count, 2)

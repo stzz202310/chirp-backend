@@ -8,6 +8,7 @@ from likes.services import LikesService
 from tweets.constants import TWEET_PHOTOS_UPLOAD_LIMIT
 from tweets.models import Tweet
 from tweets.services import TweetService
+from utils.redis_helper import RedisHelper
 
 
 class TweetSerializer(serializers.ModelSerializer):
@@ -43,7 +44,6 @@ class TweetSerializer(serializers.ModelSerializer):
         )
 
     def get_likes_count(self, obj):
-        import random
         # if random.randint(0, 1000) == 0:  # [左闭右闭]
         #     likes_count = obj.like_set.count()
         #     if obj.likes_count != likes_count:
@@ -67,11 +67,17 @@ class TweetSerializer(serializers.ModelSerializer):
         obj.likes_count = likes_count;  obj.save()   ❌ 不需要 obj.refresh_from_db()
         Tweet.objects.filter(...).update(...)        ✅ 需要 obj.refresh_from_db()
         """
-        return obj.like_set.count() # like_set 自定义
-        # return obj.likes_count    # ❌ 缓存未更新，obj未更新，✅ 数据库更新了
+        # N + 1 Queries: select count(*) -> redis get
+        # ❌ N 如果是 db queries
+        # ✅ N 如果是 cache queries
+        # TODO [Myself] cache.get_many(keys), 然后再处理 cache miss
+        return RedisHelper.get_count(obj=obj, attr='likes_count')
+        # return obj.like_set.count()   # like_set 自定义
+        # return obj.likes_count
 
     def get_comments_count(self, obj):
-        return obj.comment_set.count()  # comment_set django定义 [tweet as fk in `Comment`]
+        return RedisHelper.get_count(obj=obj, attr='comments_count')
+        # return obj.comment_set.count()  # comment_set django定义 [tweet as fk in `Comment`]
         # return obj.comments_count
 
     def get_photo_urls(self, obj):
