@@ -73,3 +73,57 @@ class RedisHelper:
         conn.lpush(key, serialized_data)
         # ltrim: 想要留下的区间 [start, end]
         conn.ltrim(name=key, start=0, end=settings.REDIS_LIST_LENGTH_LIMIT-1)
+
+    @classmethod
+    def get_count_key(cls, obj, attr):
+        # Tweet.likes_count:<tweet.id>
+        return '{}.{}:{}'.format(obj.__class__.__name__, attr, obj.id)
+
+    @classmethod
+    def incr_count(cls, obj, attr):
+        conn = RedisClient.get_connection()
+        key = cls.get_count_key(obj=obj, attr=attr)
+        # if not conn.exists(key):
+        #     conn.set(name=key, value=getattr(obj, attr))
+        #     conn.expire(name=key, time=settings.REDIS_KEY_EXPIRE_TIME)
+        #     return getattr(obj, attr)
+        # return conn.incr(name=key)
+        if conn.exists(key):
+            # cache hit
+            return conn.incr(key)   # 返回 +1 后的值
+
+        # cache miss, read from DB
+        # 必须保证调用 def incr_count() 之前，obj.attr 已经 +1 过了
+        obj.refresh_from_db()
+        count = getattr(obj, attr)  # count = obj.__dict__.get(attr)
+        conn.set(name=key, value=count)
+        conn.expire(name=key, time=settings.REDIS_KEY_EXPIRE_TIME)
+        return count
+
+    @classmethod
+    def decr_count(cls, obj, attr):
+        conn = RedisClient.get_connection()
+        key = cls.get_count_key(obj=obj, attr=attr)
+        if conn.exists(key):
+            # cache hit
+            return conn.decr(name=key)
+
+        obj.refresh_from_db()
+        count = getattr(obj, attr)
+        conn.set(name=key, value=count)
+        conn.expire(name=key, time=settings.REDIS_KEY_EXPIRE_TIME)
+        return getattr(obj, attr)
+
+    @classmethod
+    def get_count(cls, obj, attr):
+        conn = RedisClient.get_connection()
+        key = cls.get_count_key(obj=obj, attr=attr)
+        count = conn.get(key)
+        if count is not None:
+            return int(count)
+
+        obj.refresh_from_db()
+        count = getattr(obj, attr)
+        conn.set(name=key, value=count)
+        conn.expire(name=key, time=settings.REDIS_KEY_EXPIRE_TIME)
+        return count
