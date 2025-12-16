@@ -51,8 +51,19 @@ class FriendshipService(object):
         #    {from_user_id1: <User instance>,
         #     from_user_id2: <User instance>, ...}
         return [friendship.from_user for friendship in friendships]
-        # 正确的写法三: 直接用 user_id instead of user
 
+    @classmethod
+    def get_follower_ids(cls, to_user_id):
+        # 正确的写法三: 直接用 user_id instead of user
+        # .values: select * ==> select from_user_id
+        # friendships = Friendship.objects.filter(to_user_id=to_user_id).values('from_user_id')
+        # return [friendship['from_user_id'] for friendship in friendships]
+
+        # Friendship.objects.values_list('from_user_id')            [(1,), (5,), (9,)]
+        # Friendship.objects.values_list('from_user_id', flat=True) [1, 5, 9]
+        # flat=True: 只能在“只选一个字段”时使用, 把 (value,) 压扁成 value
+        from_user_ids = Friendship.objects.filter(to_user_id=to_user_id).values_list('from_user_id', flat=True)
+        return from_user_ids
 
     @classmethod
     def get_following_user_id_set(cls, from_user_id):   # memcached 缓存

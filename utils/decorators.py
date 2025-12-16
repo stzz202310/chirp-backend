@@ -5,7 +5,7 @@ from rest_framework.response import Response
 
 
 def required_params(method='GET', params=None):
-    """
+    """""""""
     当我们使用 @required_params(method='GET', params=['some_params']) 的时候
     这个 required_params 函数应该需要返回一个 decorator 函数,
     这个 decorator 函数的参数 就是被 @required_params 包裹起来的函数 view_func
@@ -17,7 +17,7 @@ def required_params(method='GET', params=None):
         params = []
 
     def decorator(view_func):   # views.py 中的 function
-        """
+        """""""""
         decorator 函数通过 wraps 来将 view_func 里的参数解析出来传递给 _wrapped_view
         这里的 instance 参数其实就是在 view_func 里的 self
                  def list(self,     request, *args, **kwargs):

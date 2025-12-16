@@ -14,7 +14,7 @@ from utils.permissions import IsObjectOwner, IsCommentOwnerOrTweetOwner
 
 
 class CommentViewSet(viewsets.GenericViewSet):
-    """
+    """""""""
     只实现 list, create, update, destroy 的方法
     不实现 retrieve (查询单个 comment) 的方法，因为没有这个需求
     """

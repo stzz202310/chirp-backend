@@ -10,8 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
+
+from kombu import Queue
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -272,13 +274,32 @@ CELERY_BROKER_URL = 'redis://127.0.0.1:6379/2' if not TESTING else 'redis://127.
 CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_ALWAYS_EAGER = TESTING
 CELERY_TASK_EAGER_PROPAGATES = TESTING
+CELERY_QUEUES = (
+    Queue(name='default', routing_key='default'),
+    Queue(name='newsfeeds', routing_key='newsfeeds'),
+)
 """
-CELERY_WORKER_CONCURRENCY = 4       concurrency ≈ CPU 核心数
-celery -A twitter worker -l info -c 4
-一个 Worker 内部 4 个子进程, 同时可以处理 最多 4 个任务
-"""
+import os
+if os.environ.get('WORKER_TYPE') == 'newsfeeds':
+    CELERY_QUEUES = (Queue(name='newsfeeds', routing_key='newsfeeds'),)
+if os.environ.get('WORKER_TYPE') == 'default':
+    CELERY_QUEUES = (Queue(name='default', routing_key='default'),)
+...
+worker分组: 100台workers [90台订阅 'newsfeeds', 10台订阅 'default']
 
-"""
+
+name: 队列本身的名字
+celery -A twitter worker -Q default,newsfeeds -l info  [监听 default,newsfeeds 队列]
+ 
+task  →  exchange  → (routing_key 匹配) →  queue
+包裹   →  分拣中心   → 包裹上的目的地标签   →  最终投递的仓库
+一个 exchange 可以连多个 queue, exchange 不会看 queue 名，只看 [routing_key]
+
+Queue(name='default', routing_key='default'),
+任何 routing_key = 'default' 的任务都进 'default' queue
+
+================================================================================
+
 测试环境
 REDIS_DB = 0
 CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
@@ -291,6 +312,11 @@ REDIS_DB = 1
 CELERY_BROKER_URL = 'redis://127.0.0.1:6379/2'
 1. 避免 key 混乱: cache 短期|可丢, broker 强一致|顺序敏感
 2. 避免误删: .flushdb() 如果 cache + broker 共用 DB，Celery 直接炸
+
+
+CELERY_WORKER_CONCURRENCY = 4       concurrency ≈ CPU 核心数
+celery -A twitter worker -l info -c 4
+一个 Worker 内部 4 个子进程, 同时可以处理 最多 4 个任务
 """
 
 try:
