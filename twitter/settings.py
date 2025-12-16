@@ -261,10 +261,37 @@ CACHES = {
 # 然后安装 redis 的 python 客户端: pip install redis
 REDIS_HOST = '127.0.0.1'
 REDIS_PORT = 6379
-REDIS_DB = 0 if TESTING else 1      # Redis 的数据库: 0, 1, 2, 3, ...
+REDIS_DB = 0 if TESTING else 1      # Redis的DB(0,1,2 ...): 只是 key 的命名空间, 不是物理隔离
 REDIS_KEY_EXPIRE_TIME = 7 * 86400   # in seconds
 REDIS_LIST_LENGTH_LIMIT = 200 if not TESTING else 20    # 限制缓存长度，减少内存压力
 
+# Celery Configuration Options
+# 使用如下命令把 worker 进程（只执行异步任务的进程，可以在不同的机器上）单独跑起来
+#   celery -A twitter worker -l INFO
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/2' if not TESTING else 'redis://127.0.0.1:6379/0'
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_ALWAYS_EAGER = TESTING
+CELERY_TASK_EAGER_PROPAGATES = TESTING
+"""
+CELERY_WORKER_CONCURRENCY = 4       concurrency ≈ CPU 核心数
+celery -A twitter worker -l info -c 4
+一个 Worker 内部 4 个子进程, 同时可以处理 最多 4 个任务
+"""
+
+"""
+测试环境
+REDIS_DB = 0
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
+1. key 前缀完全不同，不会冲突
+2. CELERY_TASK_ALWAYS_EAGER = True: task 同步执行, 不经过 Redis broker,
+   Redis 里的 Celery queue 几乎不会被用到
+
+生产环境
+REDIS_DB = 1
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/2'
+1. 避免 key 混乱: cache 短期|可丢, broker 强一致|顺序敏感
+2. 避免误删: .flushdb() 如果 cache + broker 共用 DB，Celery 直接炸
+"""
 
 try:
     from twitter.local_settings import *
