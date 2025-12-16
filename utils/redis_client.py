@@ -22,7 +22,7 @@ class RedisClient:
 
     @classmethod
     def clear(cls):
-        # clear all keys in redis, for testing purpose
+        # clear all keys in redis, for testing purpose ONLY
         if not settings.TESTING:
             raise Exception("You can not flush redis in production environment")
         conn = cls.get_connection()
