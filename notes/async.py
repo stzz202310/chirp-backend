@@ -1,7 +1,4 @@
-print(0)
-
-
-"""
+"""""""""
 webserver1  webserver2  x 5000 [20:1]   可以访问数据库     webserver: django
 
 Message Queue [按照一定规则将任务分配给 "其中一个" worker]    CELERY_BROKER_URL = 'redis://127.0.0.1:6379/2'
@@ -32,7 +29,6 @@ Celery worker 拉取
   ↓
 执行 task
 
-
 2. CELERY_TASK_ALWAYS_EAGER = True [同步 立刻执行, 不依赖 Redis, 不需要 worker]
 Django request
   ↓
@@ -40,8 +36,6 @@ Django request
   ↓
 返回结果
 
-CELERY_TASK_ALWAYS_EAGER = True:     task 同步执行
-任务返回值立刻可用
 result = add.delay(1, 2)
 print(result.get())
 eager=True  → 立刻返回 3
@@ -64,7 +58,6 @@ task.apply(throw=True)
 4. 默认情况: False
 Celery 是一个 异步系统, 默认假设 [task 崩了 ≠ request 崩了], 所以 [异常默认被隔离]
 
-
 @shared_task
 def divide(a, b):
     return a / b
@@ -79,5 +72,29 @@ CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 结果: ZeroDivisionError: division by zero
+
+=======================================================================================
+
+明星发帖 =request=> webserver ==> db [fanout]   10s 后, fanout 完成
+发帖完成 <=response=
+
+明星发帖 =request=> webserver ==> db [把这个帖子写入 tweet 表单] 
+发帖完成 <=response=          ==> MQ [创建1个异步任务] ==> worker x 1 ==> db   fanout时间: 10s
+发帖完成 <=response=          ==> MQ [创建n个异步任务] ==> worker x n ==> db   fanout时间: {10/n}s
+
+1. 单个任务执行时间过长的潜在风险: 任务中途出错，数据库连接超时
+2. 使用分布式系统，把任务批量化 [100个workers, 每个worker 20个子进程, 并发能力=2000]
+
+=======================================================================================
+    
+default 队列   fanout_newsfeeds_main_task + fanout_newsfeeds_batch_task
+明星发帖后，default 队列 把任务批量化分配给 default 队列
+default 队列 会被批量化的 fanout newsfeeds 任务占据，新的任务(用户注册验证)只能排在后面 等待被执行
+
+default 队列   fanout_newsfeeds_main_task
+newsfeeds 队列 fanout_newsfeeds_batch_task
+明星发帖后，default 队列 把任务批量化分配给 newsfeeds 队列
+newsfeeds 队列 批量化的 fanout newsfeeds 任务
+default   队列 可以继续接收 新的任务
 
 """

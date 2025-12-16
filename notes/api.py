@@ -1,7 +1,4 @@
-print(0)
-
-
-"""
+"""""""""
 POST    /api/XXXs/      create      [write: request.data]
 GET     /api/XXXs/      list        [read: request.query_params]
 GET     /api/XXXs/1/    retrieve    [read: request.query_params]

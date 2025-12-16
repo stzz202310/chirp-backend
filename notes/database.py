@@ -1,7 +1,4 @@
-print(0)
-
-
-"""
+"""""""""
 python manage.py shell
 
 from tweets.models import Tweet

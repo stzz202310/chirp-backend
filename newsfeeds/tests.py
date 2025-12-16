@@ -2,6 +2,8 @@ from newsfeeds.services import NewsFeedService
 from testing.testcases import TestCase
 from utils.redis_client import RedisClient
 from twitter.cache import USER_NEWSFEEDS_PATTERN
+from newsfeeds.models import NewsFeed
+from newsfeeds.tasks import fanout_newsfeeds_main_task
 
 class NewsFeedServiceTests(TestCase):
 
@@ -52,3 +54,58 @@ class NewsFeedServiceTests(TestCase):
 
         newsfeeds = NewsFeedService.get_cached_newsfeeds(user_id=self.taotao.id)
         self.assertEqual([f.id for f in newsfeeds], [newsfeed2.id, newsfeed1.id])
+
+
+class NewsFeedTaskTests(TestCase):
+
+    def setUp(self):
+        self.clear_cache()
+        self.taotao = self.create_user(username='taotao')
+        self.zhuzhu = self.create_user(username='zhuzhu')
+
+    def test_fanout_main_task(self):
+        # 1. zhuzhu 关注 taotao, Fanout taotao's tweet
+        tweet = self.create_tweet(user=self.taotao, content='tweet1')
+        self.create_friendship(from_user=self.zhuzhu, to_user=self.taotao)
+        msg = fanout_newsfeeds_main_task(tweet_id=tweet.id, tweet_user_id=self.taotao.id)
+        self.assertEqual(
+            msg,
+            '1 newsfeeds going to fanout, 1 batches created.'
+        )
+        self.assertEqual(NewsFeed.objects.count(), 1 + 1)
+        cached_list = NewsFeedService.get_cached_newsfeeds(user_id=self.taotao.id)
+        self.assertEqual(len(cached_list), 1)
+        cached_list = NewsFeedService.get_cached_newsfeeds(user_id=self.zhuzhu.id)
+        self.assertEqual(len(cached_list), 1)
+
+        # 2. 三个人 关注 taotao, Fanout taotao's tweet
+        for i in range(2):
+            user = self.create_user(username=f'user{i}')
+            self.create_friendship(from_user=user, to_user=self.taotao)
+        tweet = self.create_tweet(user=self.taotao, content='tweet2')
+        msg = fanout_newsfeeds_main_task(tweet_id=tweet.id, tweet_user_id=self.taotao.id)
+        self.assertEqual(
+            msg,
+            '3 newsfeeds going to fanout, 1 batches created.'
+        )
+        self.assertEqual(NewsFeed.objects.count(), 2 + 4)
+        cached_list = NewsFeedService.get_cached_newsfeeds(user_id=self.taotao.id)
+        self.assertEqual(len(cached_list), 2)
+        cached_list = NewsFeedService.get_cached_newsfeeds(user_id=self.zhuzhu.id)
+        self.assertEqual(len(cached_list), 2)
+
+        # 3. 五个人 关注 taotao, Fanout taotao's tweet
+        for i in range(2):
+            user = self.create_user(username=f'user{i+2}')
+            self.create_friendship(from_user=user, to_user=self.taotao)
+        tweet = self.create_tweet(user=self.taotao, content='tweet3')
+        msg = fanout_newsfeeds_main_task(tweet_id=tweet.id, tweet_user_id=self.taotao.id)
+        self.assertEqual(
+            msg,
+            '5 newsfeeds going to fanout, 2 batches created.'
+        )
+        self.assertEqual(NewsFeed.objects.count(), 2 + 4 + 6)
+        cached_list = NewsFeedService.get_cached_newsfeeds(user_id=self.taotao.id)
+        self.assertEqual(len(cached_list), 3)
+        cached_list = NewsFeedService.get_cached_newsfeeds(user_id=self.zhuzhu.id)
+        self.assertEqual(len(cached_list), 3)

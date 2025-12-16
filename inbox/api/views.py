@@ -26,7 +26,7 @@ class NotificationViewSet(
         #   settings.AUTH_USER_MODEL,           可以在 twitter.settings 中自定义 user
         #   related_name='notifications', ...)  user.notifications 自定义 | user.notification_set 默认
         # return self.request.user.notifications.all()
-        """
+        """""""""
         request vs self.request
         1. DRF 的 action 方法是作为“普通方法”被调用的，需要显式接收 request 参数
            def unread_count(self, request, *args, **kwargs):
@@ -68,7 +68,7 @@ class NotificationViewSet(
 
     @required_params(method='PUT', params=['unread',])
     def update(self, request, *args, **kwargs):
-        """
+        """""""""
         用户可以标记一个 notification 为已读或者未读。标记已读和未读都是对 notification
         的一次更新操作，所以直接重载 update 的方法来实现。另外一种实现方法使用一个专属的 actions:
             @action(methods=['POST'], detail=True, url_path='mark-as-read')

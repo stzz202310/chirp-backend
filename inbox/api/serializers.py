@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 
 class NotificationSerializer(serializers.ModelSerializer):
-    """
+    """""""""
     verb = "给你的帖子{target}点了赞"
     verb = "liked your tweet {target}"
     前端：渲染

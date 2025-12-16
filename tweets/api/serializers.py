@@ -51,7 +51,7 @@ class TweetSerializer(serializers.ModelSerializer):
         #         obj.save()
         #     return likes_count
         # return obj.likes_count
-        """ 
+        """ """"""
         Like  Table: return obj.like_set.count()    
         Tweet Table: return obj.likes_count
         

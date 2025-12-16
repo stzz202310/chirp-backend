@@ -17,7 +17,7 @@ class EndlessPagination(PageNumberPagination):
         pass            # 不需要 HTML 输出, 只输出 JSON
 
     def paginate_queryset(self, queryset, request, view=None):
-        """
+        """""""""
         Endless Pagination
         如何不依赖于 中心化的数据库节点，实现一个分布式的全局递增的 ID生成算法？
         中心化的数据库节点: 由中心统一分配 [加锁, 获取当前最大id => id+1 => 更新回数据库, 解锁 => 分配此id]
