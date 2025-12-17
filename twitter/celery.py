@@ -34,7 +34,7 @@ def debug_task(self):
 bind=True   把 task 实例本身作为第一个参数; self.request 包含 task id, args|kwargs, retries
 ignore_result=True  不把 task 执行结果存到 result backend, 减少 Redis / DB 压力
 
-celery -A twitter worker -l info [-c 4]
+celery -A twitter worker -l info
 
 from twitter.celery import debug_task
 debug_task.delay()  # <AsyncResult: d1477fa6-b59d-4fe6-aa69-8228a01c0501>

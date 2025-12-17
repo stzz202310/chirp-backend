@@ -6,7 +6,7 @@ from newsfeeds.models import NewsFeed
 from utils.time_constants import ONE_HOUR
 
 
-@ shared_task(bind=True, routing_key='newsfeeds', time_limit=ONE_HOUR)
+@shared_task(bind=True, routing_key='newsfeeds', time_limit=ONE_HOUR)
 def fanout_newsfeeds_batch_task(self, tweet_id, follower_ids):
     # 打印当前任务队列信息
     # print("Batch task executing on queue:", getattr(self.request, "delivery_info", {}))
@@ -58,12 +58,12 @@ def fanout_newsfeeds_main_task(self, tweet_id, tweet_user_id):
     index = 0
     while index < len(follower_ids):
         batch_ids = follower_ids[index: index + FANOUT_BATCH_SIZE]
-        # fanout_newsfeeds_batch_task.delay(tweet_id=tweet_id, follower_ids=batch_ids)
-        fanout_newsfeeds_batch_task.apply_async(
-            kwargs={'tweet_id': tweet_id, 'follower_ids': batch_ids},
-            queue='newsfeeds',
-            routing_key='newsfeeds',  # 可省略，queue 已经决定
-        )
+        fanout_newsfeeds_batch_task.delay(tweet_id=tweet_id, follower_ids=batch_ids)
+        # fanout_newsfeeds_batch_task.apply_async(
+        #     kwargs={'tweet_id': tweet_id, 'follower_ids': batch_ids},
+        #     queue='newsfeeds',
+        #     routing_key='newsfeeds',  # 可省略，queue 已经决定
+        # )
         index += FANOUT_BATCH_SIZE
 
     batch_count = (len(follower_ids) - 1) // FANOUT_BATCH_SIZE + 1

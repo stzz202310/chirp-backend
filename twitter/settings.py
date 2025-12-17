@@ -9,7 +9,6 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
-
 import sys
 from pathlib import Path
 
@@ -95,6 +94,7 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
+    'EXCEPTION_HANDLER': 'utils.ratelimit.exception_handler',
 }
 
 # 所有的 HTTP 请求和响应都会按顺序依次经过这些 middleware
@@ -256,6 +256,12 @@ CACHES = {
         # def setUp(self):
         #   self.clear_cache()
     },
+    'ratelimit': {
+        'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
+        'LOCATION': '127.0.0.1:11211',
+        'TIMEOUT': 86400 * 7,
+        'KEY_PREFIX': 'rl',
+    },
 }
 
 # Redis
@@ -274,16 +280,21 @@ CELERY_BROKER_URL = 'redis://127.0.0.1:6379/2' if not TESTING else 'redis://127.
 CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_ALWAYS_EAGER = TESTING
 CELERY_TASK_EAGER_PROPAGATES = TESTING
-CELERY_QUEUES = (
+CELERY_TASK_QUEUES = (
     Queue(name='default', routing_key='default'),
     Queue(name='newsfeeds', routing_key='newsfeeds'),
 )
+CELERY_TASK_ROUTES = {
+    'newsfeeds.tasks.fanout_newsfeeds_main_task': {'queue': 'default'},
+    'newsfeeds.tasks.fanout_newsfeeds_batch_task': {'queue': 'newsfeeds'},
+}
+
 """
 import os
 if os.environ.get('WORKER_TYPE') == 'newsfeeds':
-    CELERY_QUEUES = (Queue(name='newsfeeds', routing_key='newsfeeds'),)
+    CELERY_TASK_QUEUES = (Queue(name='newsfeeds', routing_key='newsfeeds'),)
 if os.environ.get('WORKER_TYPE') == 'default':
-    CELERY_QUEUES = (Queue(name='default', routing_key='default'),)
+    CELERY_TASK_QUEUES = (Queue(name='default', routing_key='default'),)
 ...
 worker分组: 100台workers [90台订阅 'newsfeeds', 10台订阅 'default']
 
@@ -318,6 +329,11 @@ CELERY_WORKER_CONCURRENCY = 4       concurrency ≈ CPU 核心数
 celery -A twitter worker -l info -c 4
 一个 Worker 内部 4 个子进程, 同时可以处理 最多 4 个任务
 """
+
+# Rate Limiter
+RATELIMIT_USE_CACHE = 'ratelimit'
+# RATELIMIT_CACHE_PREFIX = 'rl:'  # 避免和其他的 key 冲突
+RATELIMIT_ENABLE = not TESTING # 在某些环境下，比如内部测试，一般会关掉
 
 try:
     from twitter.local_settings import *

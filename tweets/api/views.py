@@ -12,7 +12,8 @@ from tweets.models import Tweet
 from tweets.services import TweetService
 from utils.decorators import required_params
 from utils.paginations import EndlessPagination
-from utils.memcached_helper import MemcachedHelper
+from django.utils.decorators import method_decorator
+from ratelimit.decorators import ratelimit
 
 
 class TweetViewSet(viewsets.GenericViewSet):
@@ -26,6 +27,10 @@ class TweetViewSet(viewsets.GenericViewSet):
         return [IsAuthenticated()]  # (): 实例化
 
     @required_params(method='GET', params=['user_id'])
+    @method_decorator(ratelimit(key='user_or_ip', rate='5/s', method='GET', block=True))
+    # self.action == 'list': AllowAny()
+    # 已登陆: key = user [先 user 后 ip]
+    # 未登陆: key = ip
     def list(self, request):    # GET /api/tweets/?user_id=1
         user_id = request.query_params.get('user_id')
         cached_tweets = TweetService.get_cached_tweets(user_id=user_id)
@@ -62,6 +67,7 @@ class TweetViewSet(viewsets.GenericViewSet):
         )
         return self.get_paginated_response(data=serializer.data)
 
+    @method_decorator(ratelimit(key='user_or_ip', rate='5/s', method='GET', block=True))
     def retrieve(self, request, *args, **kwargs):
         # TODO [EASY]: 通过某个 query 参数 with_all_comments     来决定是否需要带上所有 comments
         # TODO [EASY]: 通过某个 query 参数 with_preview_comments 来决定是否需要带上前三条 comments
@@ -77,6 +83,8 @@ class TweetViewSet(viewsets.GenericViewSet):
         )
         return Response(data=serializer.data, status=status.HTTP_200_OK)
 
+    @method_decorator(ratelimit(key='user', rate='1/s', method='POST', block=True))
+    @method_decorator(ratelimit(key='user', rate='5/m', method='POST', block=True))
     def create(self, request):
         # 重载 create 方法，因为需要默认用当前登录用户作为 tweet.user
         serializer = TweetSerializerForCreate(

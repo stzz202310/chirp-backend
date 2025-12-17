@@ -1,3 +1,5 @@
+from django.utils.decorators import method_decorator
+from ratelimit.decorators import ratelimit
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -40,8 +42,11 @@ class CommentViewSet(viewsets.GenericViewSet):
             return [IsAuthenticated(), IsCommentOwnerOrTweetOwner()]
         return [AllowAny()]
 
-    @required_params(method='GET', params=['tweet_id'])
-    # 检测是否有 tweet_id, 否则会返回所有的评论
+    @required_params(method='GET', params=['tweet_id']) # 检测是否有 tweet_id, 否则会返回所有的评论
+    @method_decorator(ratelimit(key='user', rate='3/min', method='GET', block=True))
+    # required_params:  访问 webserver 机器内存, 更快 节省了 round trip time
+    # method_decorator: 访问 memcached 机器内存
+    # required_params => method_decorator => list [重量级: 轻 => 较轻 => 重(DB)]
     # TODO [HARD]: 有权限看tweet的用户,才有权限看这个tweet的评论
     def list(self, request, *args, **kwargs):
         # tweet_id = request.query_params.get('tweet_id')
@@ -67,6 +72,7 @@ class CommentViewSet(viewsets.GenericViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @method_decorator(ratelimit(key='user', rate='3/s', method='POST', block=True))
     def create(self, request, *args, **kwargs):
         data = {
             'user_id': request.user.id,
@@ -91,6 +97,7 @@ class CommentViewSet(viewsets.GenericViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @method_decorator(ratelimit(key='user', rate='3/s', method='POST', block=True))
     def update(self, request, *args, **kwargs):
         # get_object 是 DRF 包装的一个函数，会在找不到的时候 raise 404 error
         # 所以这里不需要做额外的判断
@@ -116,6 +123,7 @@ class CommentViewSet(viewsets.GenericViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @method_decorator(ratelimit(key='user', rate='5/s', method='POST', block=True))
     def destroy(self, request, *args, **kwargs):
         comment = self.get_object()
         comment.delete()

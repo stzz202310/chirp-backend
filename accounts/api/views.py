@@ -4,6 +4,8 @@ from django.contrib.auth import (
     authenticate as django_authenticate,
 )
 from django.contrib.auth.models import User
+from django.utils.decorators import method_decorator
+from ratelimit.decorators import ratelimit
 from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -63,6 +65,7 @@ class AccountViewSet(viewsets.ViewSet): # 登陆 注册
     request 代表“当前发起这次请求的用户”;
     """
     @action(methods=['GET'], detail=False)  # 作用于当前会话的动作: detail=False
+    @method_decorator(ratelimit(key='ip', rate='3/s', method='GET', block=True))
     def login_status(self, request):
         # 查看用户当前的登录状态和具体信息
         data = {
@@ -75,11 +78,13 @@ class AccountViewSet(viewsets.ViewSet): # 登陆 注册
         return Response(data=data)
 
     @action(methods=['POST'], detail=False)
+    @method_decorator(ratelimit(key='ip', rate='3/s', method='POST', block=True))
     def logout(self, request):
         django_logout(request=request)
         return Response(data={'success': True})
 
     @action(methods=['POST'], detail=False)
+    @method_decorator(ratelimit(key='ip', rate='3/s', method='POST', block=True))
     def login(self, request):
         serializer = LoginSerializer(data=request.data) # get username and password from request
         if not serializer.is_valid():
@@ -114,6 +119,7 @@ class AccountViewSet(viewsets.ViewSet): # 登陆 注册
         }, status=status.HTTP_200_OK)
 
     @action(methods=['POST'], detail=False)
+    @method_decorator(ratelimit(key='ip', rate='3/s', method='POST', block=True))
     def signup(self, request):
         # 使用 username, email, password 进行注册
         serializer = SignupSerializer(data=request.data)
