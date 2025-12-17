@@ -29,9 +29,10 @@ print(qs.query)
     ❌for 循环 {Query 多次查找}, ✅prefetch_related
     ❌for 循环 {Query 多次插入}, ✅bulk_create
     ❌for 循环 {redis 多次插入}, ✅conn.rpush(key, *serialized_list)
+    ❌for 循环 {cache.get(key)},✅memcached.get_many([keys])
     
-    web (client) <-> db|redis|memcached (server) 不同机器 需要数据传输和校验
-    假设 通讯时间 10ms，SQL操作时间 1ms
+    web (client) <==> db|redis|memcached (server) 不同机器 需要数据传输和校验
+    假设 通讯时间(roundtrip time) 10ms，SQL操作时间 1ms
     通讯十次 每次插入一条[错误] = (10 + 1) * 10 = 110 ms
     通讯一次 每次插入十条[正确] = 10 + 1 * 10 = 20 ms
 
@@ -108,5 +109,56 @@ like_set, has_liked, likes_count
 
     publisher = UserSerializer()              自动去找 tweet.publisher
     publisher = UserSerializer(source='user') 自动去找 tweet.user; 必须在 meta.fields 中也定义publisher
+    
+==========================================================================================
+
+user [1 request] ==> web server [10 DB queries] ==> DB [100 I/O] ==> Disk 硬盘
+
+1 request: ~ 10 DB queries
+1 DB query ~ 10 Disk I/O 操作
+web server: 轻量级的运算，所以可以用 python
+
+RateLimit: 限制 request, 保护 DB
+✅ 数据存储在 cache [临时需要的数据 + 能支持更大的 QPS]
+   cache 作为盾，挡住大部分的请求，保护 DB
+❌ 数据存储在 webserver.local variable
+   user [1st request] ==> load balancer ==> web server1
+   user [2nd request] ==> load balancer ==> web server2
+
+=============================================================
+
+action:     login
+rate limit: 5/min
+feature: 未登录 ip, 已登陆 user_id, 手机验证 手机号 
+
+
+1. 令牌法                  TODO [Homework]: 自己实现
+key: "ip + action"
+用户 A [192.168.0.1] 1min内 第1次登陆 (memcached: 比 redis 更快)
+cache.set{key:val} = {"192.168.0.1_login":4, timeout=1min}
+用户 A [192.168.0.1] 1min内 第2次登陆
+cache.set{key, cache.get(key) - 1 = 3}
+用户 A [192.168.0.1] 1min内 第6次登陆 block
+
+缺点: "1min窗口"的定义并不是特别精确，大概限制
+例子: [0 57 58 59 60] [61 62 63 64 65]    窗口[57 65] 一共登陆了9次
+
+
+2. django-ratelimit 优化      TODO [Homework]: 自己实现
+key: "ip + action + created_at"
+用户 A [192.168.0.1] 登陆 key: {"192.168.0.1_login_20251212:10:10:59"}
+前01秒key {"192.168.0.1_login_20251212:10:10:58"}
+前02秒key {"192.168.0.1_login_20251212:10:10:57"}
+...
+前59秒key {"192.168.0.1_login_20251212:10:10:00"}
+前60秒key {"192.168.0.1_login_20251212:10:09:59"}
+if sum(cache.get(key) + cache.get(前01秒key) ... + cache.get(前60秒key)) > 5: block
+
+5/min: created_at 精确到 秒
+5/hour:created_at 精确到 分钟
+5/day: created_at 精确到 小时
+
+缺点: 60次 cache.get 请求
+优化: memcached get_many([keys])  节省 [webserver <==> cache] 机器之间的通讯时间
 
 """

@@ -19,12 +19,12 @@ class NewsFeedService(object):
         # 独立的进程，甚至在不同的机器上，没有办法知道当前 web 进程的某片内存空间里的值是什么。
         # 所以 我们只能把 ⚠️tweet.id 作为参数传进去，而不能把 tweet 传进去。
         # 因为 celery 并不知道如何 serialize Tweet
-        # fanout_newsfeeds_main_task.delay(tweet_id=tweet.id, tweet_user_id=tweet.user_id)
-        fanout_newsfeeds_main_task.apply_async(
-            kwargs={'tweet_id': tweet.id, 'tweet_user_id': tweet.user_id},
-            queue='default',
-            routing_key='default',  # 可省略，queue 已经决定
-        )
+        fanout_newsfeeds_main_task.delay(tweet_id=tweet.id, tweet_user_id=tweet.user_id)
+        # fanout_newsfeeds_main_task.apply_async(
+        #     kwargs={'tweet_id': tweet.id, 'tweet_user_id': tweet.user_id},
+        #     queue='default',
+        #     routing_key='default',  # 可省略，queue 已经决定
+        # )
 
     @classmethod
     def get_cached_newsfeeds(cls, user_id):
