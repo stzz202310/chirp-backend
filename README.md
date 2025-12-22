@@ -24,11 +24,13 @@ A practice project: implementing a simplified **Twitter backend** with **Django*
    vagrant ssh       # SSH into the VM (ssh vagrant@127.0.0.1 -p 2222)
    vagrant halt      # Stop the VM when finished
    
-2. Navigate to the project directory:
+2. Start MySQL and HBase interactive shells
    ```bash
-   cd /vagrant
-   mysql -u root -pzhuzhu   # Log in to the MySQL database
-   
+   cd /vagrant/
+   mysql -u root -pzhuzhu    # Start MySQL interactive shell
+   cd /vagrant/hbase-2.4.4/
+   ./bin/hbase shell         # Start HBase interactive shell
+
 3. Run Django commands
    ```bash
    python manage.py makemigrations
@@ -41,5 +43,24 @@ A practice project: implementing a simplified **Twitter backend** with **Django*
    django-admin.py startproject twitter  # Create a new Django project named "twitter"
    python manage.py startapp accounts    # Create a new app called "accounts"
    python manage.py shell                # Open the Django shell (interactive Python environment)
+
+4. Start Django server, Celery worker, HBase services, and Thrift server
+   ```bash
+   1. 启动 Django 开发服务器
+   2. 启动 Celery Worker
+   3. 启动 HBase
+   4. 启动 HBase Thrift Server
+      [跨语言通信框架, 用于让 Python(Django) 通过 Thrift 协议访问 Java 实现的 HBase]
+   
+   cd /vagrant/
+   python manage.py runserver 0.0.0.0:8000
+   celery -A twitter worker -l info
+   
+   cd /vagrant/hbase-2.4.4/
+   sudo ./bin/start-hbase.sh
+   sudo ./bin/hbase-daemon.sh start thrift
+
+   Django Web UI: http://localhost:8000
+   HBase Web UI: http://192.168.33.10:16010
 
 ---

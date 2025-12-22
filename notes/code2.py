@@ -10,7 +10,12 @@ config.vm.network "forwarded_port", guest: 8000, host: 80
 Guest VM 内部的 8000 端口 → 被映射到 Host 宿主机的 80 端口
 
 config.vm.network "private_network", ip: "192.168.33.10"
-宿主机可以直接访问虚拟机 IP 为 192.168.33.10，端口不变
+1. 给虚拟机分配一个固定 IP (本例：192.168.33.10)
+2. 宿主机可以直接通过该 IP 访问虚拟机, 端口不变 [不需要做端口转发]
+3. 虚拟机与宿主机相当于同一个局域网下的两台电脑
+4. 虚拟机上的服务端口可直接用宿主机访问，例如
+    HBase Web UI: http://192.168.33.10:16010
+    MySQL: 192.168.33.10:3306
 
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "192.168.33.10"] # 允许宿主机访问虚拟机指定 IP
 作用: 限制哪些域名/IP 可以访问 Django 应用，防止未经授权的请求。
@@ -72,12 +77,6 @@ python manage.py runserver [127.0.0.1:8000]
 
 ================================================================================================================
 
-排序 [不会对数据库产生影响，只会影响 QuerySet]
-1. class Tweet(models.Model): class Meta: ordering = ('-created_at',)       不推荐，潜规则
-2. tweets = Tweet.objects.filter(user_id=user_id).order_by('-created_at')   推荐，明显直观 [2会覆盖1]
-
-================================================================================================================
-
 User    | Comment: name of model
 user    | comment: instance of User
 user_id | comment_id: the primary key of User (int)
@@ -114,14 +113,6 @@ from_user_id    数据库列               接收用户 ID（整数）
 
 ================================================================================================================
 
-(1) 更改 models
-(2) makemigrations   ← 让迁移文件跟上你的代码
-(3) test             ← 使用包含 {最新迁移文件} 的测试数据库
-(4) 如果有问题 再次修改 ← 重复1-3
-(5) migrate          ← 应用到正式数据库
-
-================================================================================================================
-
 TCP/IP 上的应用层协议: HTTP(短连接), Socket(长连接)                  payload 等价于 data 数据
 WebSocket 用 HTTP 建立连接，但通信本身不再依赖 HTTP
 
@@ -136,6 +127,55 @@ A 点赞 B
 A ==> HTTP [客户端主动发起请求 短连接] ==> Twitter Web Server [更新 Notification Model & 生成通知]
 Twitter Web Server ==> HTTP ==> APNS 推送服务器 ==> socket ==> B 手机端
 Twitter Web Server ==> HTTP ==> Twitter Push Server ==> WebSocket ==> B Web端
+
+=============================================================================================
+
+1. Apache Thrift = RPC(Remote Procedure Call 远程函数调用) + 跨语言 + 高性能通信
+
+a. RPC 示例理解
+    机器 A：a_plus_b(1, 2)
+         (1, 2)     ↑
+           ↓      返回 3
+    机器 B：def a_plus_b(a, b): return a + b
+ 
+b. 跨语言: 同一套接口定义, 自动生成多语言代码 (Python/Java/Go/C++/…)
+    HBase：Java 编写
+    Django：Python 编写
+    Thrift 负责连接 HBase（Java）和 Django（Python），作为它们之间的跨语言通信桥梁。
+ 
+c. 高性能通信: 建立在 TCP/IP 之上; 二进制协议; Header小, 数据紧凑 支持压缩
+
+
+2. Thrift vs HTTP
+    HTTP: 不推荐用于服务间通信    http://xxx/aplusb?a=1&b=2
+    Header 重, 为浏览器设计, 更适合 Server → Client ✅
+    
+    Thrift: 二进制协议, 轻量, 高效
+    适合 Server → Server / 微服务内部通信 ✅
+
+
+3. Python 访问 HBase 的真实链路
+    HBase Shell	只给人用，不适合程序
+    HBase Thrift Server	✅ 给 Python / Ruby / Go 用
+    
+    Django 负责 Web 请求和业务逻辑，并不直接与 HBase 通信。
+    Django 通过调用 HappyBase（基于 Thrift 的 Python HBase 客户端），
+    由 HappyBase 内部的 Thrift 客户端通过 Thrift 协议 与 HBase Thrift Server 通信，
+    最终访问 Java 实现的 HBase。
+    
+    浏览器
+       ↓ HTTP
+    Django（业务逻辑）
+       ↓ Python 函数调用
+    HappyBase（Python HBase 客户端）
+       ↓ Thrift 客户端（封装在 HappyBase 内部）
+    Thrift 协议（TCP）
+       ↓
+    HBase Thrift Server（Java 进程）
+       ↓
+    Java HBase API
+       ↓
+    HBase RegionServer
 
 ================================================================================================================
 

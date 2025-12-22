@@ -1,3 +1,5 @@
+from django.utils.decorators import method_decorator
+from ratelimit.decorators import ratelimit
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -12,8 +14,6 @@ from tweets.models import Tweet
 from tweets.services import TweetService
 from utils.decorators import required_params
 from utils.paginations import EndlessPagination
-from django.utils.decorators import method_decorator
-from ratelimit.decorators import ratelimit
 
 
 class TweetViewSet(viewsets.GenericViewSet):
