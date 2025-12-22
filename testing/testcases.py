@@ -32,6 +32,8 @@ class TestCase(DjangoTestCase):
             # hasattr(obj, key)
             # getattr(obj, key, default=None)
             # setattr(obj, key, value)
+            # ⚠️ key 必须是字符串 (str)
+            # ⚠️ value 几乎没有类型限制 (int, str, list, dict, None, 自定义对象)
             return self._anonymous_client
         self._anonymous_client = APIClient()
         return self._anonymous_client
@@ -56,10 +58,13 @@ class TestCase(DjangoTestCase):
         # c = [*a, * b]     c = [1, 2, 3, 4]        展开
 
         # ** 展开 dict
-        # a = {'x': 1}, b = {'y', 2}
+        # a = {'x': 1}, b = {'y': 2}
         # c = [a, b]        c = [{'x': 1}, {'y': 2}]
         # c = {*a, *b}      c = {'x', 'y'}
         # c = {**a, **b}    c = {'x': 1, 'y': 2}
+
+        # func(**{'x': 1, 'y': 2}) 等价于 func(x=1, y=2)
+        # func(**[kwargs:一个dict]) 等价于 func(**kwargs: 将一个dict解包为关键字参数)
         user = self.create_user(*args, **kwargs)
         client = APIClient()
         client.force_authenticate(user=user)

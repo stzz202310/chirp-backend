@@ -47,6 +47,16 @@ USER_PROFILE_PATTERN = 'userprofile:{user_id}'  # val: {user_id}用户的user pr
 redis: key-value storage
 Tweet    'user_tweets:{user_id}':    这个用户发的帖子   (list of tweets in JSON)
 Newsfeed 'user_newsfeeds:{user_id}': 这个用户的新鲜事列表(list of newsfeeds in JSON)
+likes_count     'Tweet.likes_count:<tweet.id>':     count 这个帖子的点赞数
+comments_count  'Tweet.comments_count:<tweet.id>':  count 这个帖子的评论数
 """
 USER_TWEETS_PATTERN = 'user_tweets:{user_id}'
 USER_NEWSFEEDS_PATTERN = 'user_newsfeeds:{user_id}'
+
+
+"""
+| 特性    | HBase / Java | Python / Ruby |
+| 配置格式 | XML          | YAML / YML    |
+| 数据结构 | key-value    | dict / list   |
+
+"""

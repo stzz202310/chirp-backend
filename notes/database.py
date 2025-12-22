@@ -5,7 +5,7 @@ from tweets.models import Tweet
 qs = Tweet.objects.all()
 print(qs.query)
 
-==========================================================================================
+========================================================================================================
 
 1. 不要用 JOIN
     例子: friendships.services | comments.api.views
@@ -43,7 +43,21 @@ print(qs.query)
    A. if len(queryset) == 21:     ✅
    B. if queryset.count() == 21:  ❌ 会产生一条query语句, SELECT Count(*) FROM `tweets_tweet` WHERE ...
 
-==========================================================================================
+========================================================================================================
+
+排序 [不会对数据库产生影响，只会影响 QuerySet]
+1. class Tweet(models.Model): class Meta: ordering = ('-created_at',)       不推荐，潜规则
+2. tweets = Tweet.objects.filter(user_id=user_id).order_by('-created_at')   推荐，明显直观 [2会覆盖1]
+
+=============================================================
+
+(1) 更改 models
+(2) makemigrations   ← 让迁移文件跟上你的代码
+(3) test             ← 使用包含 {最新迁移文件} 的测试数据库
+(4) 如果有问题 再次修改 ← 重复1-3
+(5) migrate          ← 应用到正式数据库
+
+========================================================================================================
 
 劝和不劝分: 能不能仅用参数区分 like comment / like tweet
 劝分不劝和: 一个 app 可以有多个 Models
@@ -69,7 +83,7 @@ class PushPreference(models.Model):
         db_table = 'app_model'  default
         db_table = 'XXX'        自定义
 
-==========================================================================================
+========================================================================================================
 
 like_set, has_liked, likes_count
 方法 1: models.py
@@ -110,7 +124,7 @@ like_set, has_liked, likes_count
     publisher = UserSerializer()              自动去找 tweet.publisher
     publisher = UserSerializer(source='user') 自动去找 tweet.user; 必须在 meta.fields 中也定义publisher
     
-==========================================================================================
+========================================================================================================
 
 user [1 request] ==> web server [10 DB queries] ==> DB [100 I/O] ==> Disk 硬盘
 
