@@ -1,3 +1,5 @@
+from django.conf import settings
+
 from django_hbase.client import HBaseClient
 from .exceptions import BadRowKeyError, EmptyColumnError
 from .fields import HBaseField, IntegerField, TimestampField
@@ -7,22 +9,31 @@ class HBaseModel:
 
     class Meta:
         table_name = None
-        row_key = ()    # set
+        row_key = ()    # tuple, 顺序是固定的
 
     @classmethod
     def get_table(cls):
         conn = HBaseClient.get_connection()
-        if not cls.Meta.table_name:
-            # NotImplementedError: 这个方法在当前类中没有实现，调用者应该在子类中实现它
-            raise NotImplementedError("Missing table_name in HBaseModel meta class.")
-        return conn.table(name=cls.Meta.table_name)
+        return conn.table(name=cls.get_table_name())
 
     @classmethod
     def get_field_hash(cls):
-        # {field:field_obj} = {'from_user_id':models.IntegerField(reverse=True)}
         field_hash = {}
+        """
+        obj.__dict__: 保存了 obj "实例级别"的属性及其值(⚠️不包含类属性), 本质上是一个 dict
+        cls.__dict__: 当前类自己定义的所有属性 ✅方法本质上也是属性 ❌不包含父类, 不包含实例
+        
+        def get_field_hash(cls): 定义在 父类 HBaseModel, 所以
+        ❌ 不在 HBaseFollowing.__dict__, 但可以调用 HBaseFollowing.get_field_hash()
+        ✅ 在 HBaseModel.__dict__
+
+                            是否查父类       是否能直接赋值
+        cls.__dict__        ❌ 否           ❌ 否
+        getattr(cls, 'x')   ✅ 是           ✅ 是   setattr(cls, 'new_attr', value)
+        """
         for field in cls.__dict__:
-            field_obj = getattr(cls, field)  # cls.__dict__[field]
+            # field_obj = cls.__dict__[field]
+            field_obj = getattr(cls, field)
             if isinstance(field_obj, HBaseField):
                 field_hash[field] = field_obj
         return field_hash
@@ -41,10 +52,13 @@ class HBaseModel:
         data = cls.deserialize_row_key(row_key=row_key)
         for column_key, column_value in row_data.items():
             # remove column family
+            # column_key      => key
+            # 'cf:to_user_id' => 'to_user_id'
             column_key = column_key.decode('utf-8')
             key = column_key[column_key.find(':') + 1:]
             data[key] = cls.deserialize_field(key=key, value=column_value)
-        return cls(**data)
+        instance = cls(**data)
+        return instance
 
     @classmethod
     def serialize_field(cls, field, value):
@@ -108,7 +122,10 @@ class HBaseModel:
         """
         data = {}
         if isinstance(row_key, bytes):
-            # bytes -> str
+            # b = b'hello'
+            # b.decode('utf-8') 等价于 str(b, encoding='utf-8'):  bytes => str
+            # s = 'hello'
+            # s.encode('utf-8') 等价于 bytes(s, encoding='utf-8'): str => bytes
             row_key = row_key.decode('utf-8')
 
         # [val1:val2 => val1:val2:] 方便每次 find(':') 都能找到一个 val
@@ -128,7 +145,8 @@ class HBaseModel:
         for key, field in field_hash.items():
             if not field.column_family:
                 continue
-            # key: 'from_user_id'
+            # column_key:   'cf:to_user_id'
+            # column_value: '34'
             column_key = f'{field.column_family}:{key}'
             column_value = data.get(key)
             if column_value is None:
@@ -138,7 +156,6 @@ class HBaseModel:
 
     @property
     def row_key(self):
-        # obj.__dict__: 保存了 obj "实例级别"的属性及其值(⚠️不包含类属性), 本质上是一个 dict
         return self.serialize_row_key(data=self.__dict__)
 
     def save(self):
@@ -152,12 +169,12 @@ class HBaseModel:
 
     @classmethod
     def get(cls, **kwargs):
-        # HBaseModel.get(from_user_id=1, created_at=ts)
+        # instance = HBaseFollowing.get(from_user_id=123, created_at=timestamp)
         row_key = cls.serialize_row_key(data=kwargs)
         table = cls.get_table()
-        row = table.row(row=row_key)
-        # return obj: obj.from_user_id, obj.to_user_id
-        return cls.init_from_row(row_key=row_key, row_data=row)
+        row_data = table.row(row=row_key)
+        instance = cls.init_from_row(row_key=row_key, row_data=row_data)
+        return instance
 
     @classmethod
     def create(cls, **kwargs):
@@ -165,11 +182,44 @@ class HBaseModel:
         # instance = HBaseModel(**kwargs)
         # 传给了构造函数 __init__
         instance.save()
-
-        # 1. HBaseModel.create(from_user_id=1, to_user_id=2, created_at=ts)
-        # 2. instance = HBaseModel(from_user_id=1, ...); instance.save()
-        # 3. instance.from_user_id = 2; instance.save()
         return instance
+
+    @classmethod
+    def get_table_name(cls):
+        if not cls.Meta.table_name:
+            # NotImplementedError: 这个方法在当前类中没有实现，调用者应该在子类中实现它
+            raise NotImplementedError("Missing table_name in HBaseModel meta class")
+        if settings.TESTING:
+            return f'test_{cls.Meta.table_name}'    # ⚠️
+        return cls.Meta.table_name
+
+    @classmethod
+    def drop_table(cls):
+        if not settings.TESTING:
+            raise Exception('You can not drop table outside of unit tests')
+        conn = HBaseClient.get_connection()
+        conn.delete_table(name=cls.get_table_name(), disable=True)
+
+    @classmethod
+    def create_table(cls):
+        if not settings.TESTING:
+            raise Exception('You can not create table outside of unit tests')
+        conn = HBaseClient.get_connection()
+        tables = [table.decode('utf-8') for table in conn.tables()]
+        if cls.get_table_name() in tables:
+            return
+        column_families = {
+            # column_families =
+            # { <key>          : <value> for ... }
+            # { 'cf'           : {}      for ... }
+            field.column_family: dict()
+            for key, field in cls.get_field_hash().items()
+            if field.column_family is not None
+        }
+        conn.create_table(
+            name=cls.get_table_name(),
+            families=column_families,   # {'cf': {}}
+        )
 
 """
 MySQL vs HBase 设计对比: friendships_friendship Table
@@ -191,4 +241,58 @@ RK1 = from_user_id
 RK2 = from_user_id + created_at
 RK1: 只能查 from_user_id = XX, 不支持 created_at 做范围查询
 RK2: 支持的查询等同于 index_together ('from_user', 'created_at')
+
+==================================================================================
+
+1. instance = HBaseModel(from_user_id=1, ...); instance.save()
+2. HBaseModel.create(from_user_id=1, to_user_id=2, created_at=ts)
+3. instance.from_user_id = 2; instance.save()
+
+following = HBaseFollowing(from_user_id=123, to_user_id=34, created_at=ts)
+following.save()
+
+1. cls.__dict__
+{'__module__': 'friendships.hbase_models',
+ 'from_user_id': <django_hbase.models.fields.IntegerField object at 0xffffb2bc47c0>,
+ 'created_at': <django_hbase.models.fields.TimestampField object at 0xffffb2bc4880>,
+ 'to_user_id': <django_hbase.models.fields.IntegerField object at 0xffffb2bc48e0>,
+ 'Meta': <class 'friendships.hbase_models.HBaseFollowing.Meta'>, '__doc__': None}
+
+2. field_hash = {field:field_obj}: field_obj 必须是 HBaseField 的实例
+{'from_user_id': <django_hbase.models.fields.IntegerField object at 0xffffb2bc47c0>,
+ 'created_at': <django_hbase.models.fields.TimestampField object at 0xffffb2bc4880>,
+ 'to_user_id': <django_hbase.models.fields.IntegerField object at 0xffffb2bc48e0>,}
+
+3. 构造函数 def __init__(self, **kwargs):
+self.__dict__: {'from_user_id': 123, 'created_at': 1766539154271597, 'to_user_id': 34}
+
+4. def save(self): 序列化
+    data: {'from_user_id': 123, 'created_at': 1766539154271597, 'to_user_id': 34}
+    row_data = self.serialize_row_data(data=self.__dict__)
+    row_data: {'cf:to_user_id': '0000000000000034'}
+
+    def row_key(self): return self.serialize_row_key(data=self.__dict__)
+    row_key: b'3210000000000000:1766539154271597'
+    
+    table.put(row=self.row_key, data=row_data)
+    {row_key                              : {column_key     : value}}
+    {b'3210000000000000:1766539154271597' : {'cf:to_user_id': '0000000000000034'}}
+
+5. def get(cls, **kwargs): 反序列化
+    table: <happybase.table.Table name=b'test_twitter_followings'>
+    row_key: b'3210000000000000:1766539154271597'
+    row_data: {b'cf:to_user_id': b'0000000000000034'}
+    row_data = table.row(row=row_key)
+
+    def init_from_row(cls, row_key, row_data):
+        data = cls.deserialize_row_key(row_key=row_key)
+        data: {'from_user_id': 123, 'created_at': 1766539154271597}
+        
+        for column_key, column_value in row_data.items():
+            data[key] = cls.deserialize_field(key=key, value=column_value)
+        data: {'from_user_id': 123, 'created_at': 1766539154271597, 'to_user_id': 34}
+        
+        instance = HBaseFollowing(**data)
+        instance = HBaseFollowing(from_user_id=123, to_user_id=34, created_at=ts)
+
 """

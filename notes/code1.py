@@ -40,6 +40,7 @@ from ratelimit.exceptions import Ratelimited
 
 from dateutil import parser
 from datetime import datetime
+import happybase
 import pytz
 
 """

@@ -1,3 +1,7 @@
+import time
+
+from django_hbase.models import BadRowKeyError, EmptyColumnError
+from friendships.hbase_models import HBaseFollowing, HBaseFollower
 from friendships.models import Friendship
 from friendships.services import FriendshipService
 from testing.testcases import TestCase
@@ -25,3 +29,72 @@ class FriendshipServiceTests(TestCase):
         # FriendshipService.invalidate_following_cache(from_user_id=self.taotao.id)
         user_id_set = FriendshipService.get_following_user_id_set(from_user_id=self.taotao.id, )
         self.assertEqual(user_id_set, {user1.id, user2.id,})
+
+
+class HBaseTests(TestCase):
+    # def setUp(self):
+    #     super(HBaseTests, self).setUp()
+    # def tearDown(self):
+    #     super(HBaseTests, self).tearDown()
+
+    @property
+    def ts_now(self):
+        return int(time.time() * 1000000)
+
+    def test_save_and_get(self):
+        timestamp = self.ts_now
+        following = HBaseFollowing(from_user_id=123, to_user_id=34, created_at=timestamp)
+        following.save()
+
+        instance = HBaseFollowing.get(from_user_id=123, created_at=timestamp)
+        # 如何查询 用户123 是否关注了 用户34?
+        # 答: 用户34 in [用户123 所有的关注用户], cache 优化
+        self.assertEqual(instance.from_user_id, 123)
+        self.assertEqual(instance.to_user_id, 34)
+        self.assertEqual(instance.created_at, timestamp)
+
+        following.to_user_id = 456
+        following.save()
+
+        instance = HBaseFollowing.get(from_user_id=123, created_at=timestamp)
+        self.assertEqual(instance.from_user_id, 123)
+        self.assertEqual(instance.to_user_id, 456)
+        self.assertEqual(instance.created_at, timestamp)
+
+        # object does not exist, return None
+        instance = HBaseFollowing.get(from_user_id=123, created_at=self.ts_now)
+        self.assertEqual(instance, None)
+
+    def test_create_and_get(self):
+        # 1. missing column data, can not store in HBase
+        try:
+            HBaseFollower.create(to_user_id=1, created_at=self.ts_now)
+            exception_raised = False
+        except EmptyColumnError:
+            exception_raised = True
+        self.assertTrue(exception_raised, True)
+
+        # 2. invalid row_key
+        try:
+            HBaseFollower.create(from_user_id=1, to_user_id=2)
+            exception_raised = False
+        except BadRowKeyError as e:
+            exception_raised = True
+            self.assertEqual(str(e), 'created_at is missing in row key.')
+        self.assertTrue(exception_raised, True)
+
+        ts = self.ts_now
+        HBaseFollower.create(from_user_id=1, to_user_id=2, created_at=ts)
+        instance = HBaseFollower.get(to_user_id=2,  created_at=ts)
+        self.assertEqual(instance.from_user_id, 1)
+        self.assertEqual(instance.to_user_id, 2)
+        self.assertEqual(instance.created_at, ts)
+
+        # 3. can not get if row key is missing
+        try:
+            HBaseFollower.get(to_user_id=2)
+            exception_raised = False
+        except BadRowKeyError as e:
+            exception_raised = True
+            self.assertEqual(str(e), 'created_at is missing in row key.')
+        self.assertTrue(exception_raised, True)
