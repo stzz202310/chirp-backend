@@ -140,7 +140,7 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'twitter',
-        'HOST': '0.0.0.0',
+        'HOST': '127.0.0.1',
         'PORT': '3306',
         'USER': 'root',
         'PASSWORD': 'zhuzhu',
@@ -251,12 +251,6 @@ CACHES = {
         'TIMEOUT': 86400,
         'KEY_PREFIX': 'testing',
         # 实际存储的 key: 'testing_followings:3'
-        
-        # Django 在每个测试结束后 只会删除测试数据库
-        # 不会自动清空缓存，因为 cache 是外部系统（memcached, redis）
-        # 所以测试期间写入的 cache key 仍然存在，需要手动清理
-        # def setUp(self):
-        #   self.clear_cache()
     },
     'ratelimit': {
         'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',

@@ -1,7 +1,7 @@
 class HBaseField:
     field_type = None
 
-    def __init__(self, reverse=False, column_family=None):
+    def __init__(self, reverse=False, column_family=None):  # 构造函数
         self.reverse = reverse
         self.column_family = column_family
         # TODO [Homework]
@@ -42,15 +42,20 @@ class HBaseField:
         user_id = 2132 =   0000 0000 0000 2132
         reverse(user_id) = 2312 0000 0000 0000
         
-        Padding(补零): 
-        10  → reverse → 01 → 1
-        100 → reverse → 001 → 1
+        Padding(补零) 的作用:
+        1. 解决字符串按字典序排序导致的数值顺序错误问题
+           例如: "1", "10", "2" → 排序结果不符合数值大小
+           
+        2. 统一长度，避免 reverse / 字符串操作导致的信息丢失
+           例如: 不补零会出现歧义
+           10  → reverse → 01 → 1
+           100 → reverse → 001 → 1
         
         查询需求        
         ✅ user_id = XX, ❌ user_id 范围查询
         ✅ timestamp 范围查询
         
-        反转: 有序 → 无序; 范围扫描失效
+        反转: 有序 → 无序; 范围查询失效
         ✅ user_id   可以反转
         ❌ timestamp 不能反转
         """

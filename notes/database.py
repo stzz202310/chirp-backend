@@ -148,7 +148,7 @@ feature: 未登录 ip, 已登陆 user_id, 手机验证 手机号
 
 1. 令牌法                  TODO [Homework]: 自己实现
 key: "ip + action"
-用户 A [192.168.0.1] 1min内 第1次登陆 (memcached: 比 redis 更快)
+用户 A [192.168.0.1] 1min内 第1次登陆 (⚠️memcached: 比 redis 更快)
 cache.set{key:val} = {"192.168.0.1_login":4, timeout=1min}
 用户 A [192.168.0.1] 1min内 第2次登陆
 cache.set{key, cache.get(key) - 1 = 3}
@@ -174,5 +174,31 @@ if sum(cache.get(key) + cache.get(前01秒key) ... + cache.get(前60秒key)) > 5
 
 缺点: 60次 cache.get 请求
 优化: memcached get_many([keys])  节省 [webserver <==> cache] 机器之间的通讯时间
+
+========================================================================================================
+┌─────────────┐
+│ Django App  │
+└──────┬──────┘
+       ├── MySQL       → 127.0.0.1:3306
+       ├── Redis       → 127.0.0.1:6379
+       ├── Memcached   → 127.0.0.1:11211
+       └── HBase       → 127.0.0.1:9090 (Thrift)
+
+0.0.0.0:   监听所有网卡
+127.0.0.1: 只监听本机
+
+Django 测试环境中的数据清理规则
+1. Django 会自动处理的部分:   MySQL (仅限 DATABASES 中配置的数据库)
+2. Django 不会自动处理的部分: ⚠️ memcached, redis, HBase, Celery broker
+   因为它们 不受 Django ORM / TestRunner 控制, 需要手动清理
+
+class TestCase(DjangoTestCase):
+
+    def setUp(self):    # setUp 会在每个 test_xxx 运行前 被执行
+        self.clear_cache()
+        hbase_model_class.create_table()
+
+    def tearDown(self): # tearDown 会在每个 test_xxx 运行后 被执行
+        hbase_model_class.drop_table()
 
 """
