@@ -31,14 +31,16 @@ class HBaseModel:
         cls.__dict__        ❌ 否           ❌ 否
         getattr(cls, 'x')   ✅ 是           ✅ 是   setattr(cls, 'new_attr', value)
         """
-        for field in cls.__dict__:
-            # field_obj = cls.__dict__[field]
-            field_obj = getattr(cls, field)
-            if isinstance(field_obj, HBaseField):
-                field_hash[field] = field_obj
+        for key in cls.__dict__:
+            # field = cls.__dict__[key]
+            field = getattr(cls, key)
+            if isinstance(field, HBaseField):
+                field_hash[key] = field
         return field_hash
 
     def __init__(self, **kwargs):
+        # 调用构造函数 __init__
+        # cls(**kwargs)|HBaseFollowing(**kwargs)|following = HBaseFollowing(from_user_id=1,...)
         for key, field in self.get_field_hash().items():
             value = kwargs.get(key)
             setattr(self, key, value)
@@ -52,8 +54,8 @@ class HBaseModel:
         data = cls.deserialize_row_key(row_key=row_key)
         for column_key, column_value in row_data.items():
             # remove column family
-            # column_key      => key
-            # 'cf:to_user_id' => 'to_user_id'
+            #   column_key      => key
+            #   'cf:to_user_id' => 'to_user_id'
             column_key = column_key.decode('utf-8')
             key = column_key[column_key.find(':') + 1:]
             data[key] = cls.deserialize_field(key=key, value=column_value)
@@ -83,7 +85,7 @@ class HBaseModel:
         return value
 
     @classmethod
-    def serialize_row_key(cls, data):
+    def serialize_row_key(cls, data, is_prefix=False):
         """""""""
         serialize dict to bytes (not str)
         {key1: val1}                         => b"val1"
@@ -105,7 +107,9 @@ class HBaseModel:
             field = field_hash.get(key)
             value = data.get(key)
             if value is None:
-                raise BadRowKeyError(f"{key} is missing in row key.")
+                if is_prefix is False:
+                    raise BadRowKeyError(f"{key} is missing in row key.")
+                break
             value = cls.serialize_field(field=field, value=value)
             if ':' in value:
                 # val 不能有冒号":", 否则解析时会报错
@@ -170,19 +174,18 @@ class HBaseModel:
     @classmethod
     def get(cls, **kwargs):
         # instance = HBaseFollowing.get(from_user_id=123, created_at=timestamp)
-        row_key = cls.serialize_row_key(data=kwargs)
         table = cls.get_table()
+        row_key = cls.serialize_row_key(data=kwargs)
         row_data = table.row(row=row_key)
         instance = cls.init_from_row(row_key=row_key, row_data=row_data)
         return instance
 
     @classmethod
     def create(cls, **kwargs):
-        instance = cls(**kwargs)
-        # instance = HBaseModel(**kwargs)
-        # 传给了构造函数 __init__
+        instance = cls(**kwargs)    # 调用构造函数 __init__
         instance.save()
         return instance
+    # TODO [Homework] 实现一个 get_or_create 的方法，返回 (instance, created)
 
     @classmethod
     def get_table_name(cls):
@@ -221,6 +224,45 @@ class HBaseModel:
             families=column_families,   # {'cf': {}}
         )
 
+    @classmethod
+    def serialize_row_key_from_tuple(cls, row_key_tuple):
+        if row_key_tuple is None:
+            return None
+        data = {
+            key : value
+            for key, value in zip(cls.Meta.row_key, row_key_tuple)
+        }
+        return cls.serialize_row_key(data=data, is_prefix=True)
+
+    @classmethod
+    def filter(cls, start=None, stop=None, prefix=None, limit=None, reverse=False):
+        # start|stop|prefix=(from_user_id, created_at)
+        # results = HBaseFollowing.filter(prefix=(1, None, None), limit=2, reverse=True)
+        # results = HBaseFollowing.filter(start=(1, results[1].created_at, None), limit=2, reverse=True)
+
+        # serialize tuple to str
+        row_start = cls.serialize_row_key_from_tuple(row_key_tuple=start)
+        row_stop = cls.serialize_row_key_from_tuple(row_key_tuple=stop)
+        row_prefix = cls.serialize_row_key_from_tuple(row_key_tuple=prefix)
+
+        # scan table
+        table = cls.get_table()
+        rows = table.scan(
+            row_start=row_start,
+            row_stop=row_stop,
+            row_prefix=row_prefix,
+            limit=limit,
+            reverse=reverse,
+        )
+
+        # deserialize to instance list
+        instances = []
+        for row_key, row_data in rows:
+            instance = cls.init_from_row(row_key=row_key, row_data=row_data)
+            instances.append(instance)
+        return instances
+
+
 """
 MySQL vs HBase 设计对比: friendships_friendship Table
 
@@ -251,14 +293,28 @@ RK2: 支持的查询等同于 index_together ('from_user', 'created_at')
 following = HBaseFollowing(from_user_id=123, to_user_id=34, created_at=ts)
 following.save()
 
-1. cls.__dict__
+key:    'from_user_id'
+value:  123
+field:  <django_hbase.models.fields.IntegerField object at 0xffffb2bc47c0>
+
+str|bytes   table.put(row=self.row_key, data=row_data)
+str|bytes   row_data = table.row(row=row_key)
+⚠️ bytes    table.scan(row_start, row_stop, row_prefix)
+
+conn.tables()                           # Return a list of table names available in this HBase instance
+conn.table(name=cls.get_table_name())   # Return a table object
+conn.delete_table(name=cls.get_table_name(), disable=True)
+conn.create_table(name=cls.get_table_name(), families=column_families)
+
+
+1. cls.__dict__ | HBaseFollowing.__dict__
 {'__module__': 'friendships.hbase_models',
  'from_user_id': <django_hbase.models.fields.IntegerField object at 0xffffb2bc47c0>,
  'created_at': <django_hbase.models.fields.TimestampField object at 0xffffb2bc4880>,
  'to_user_id': <django_hbase.models.fields.IntegerField object at 0xffffb2bc48e0>,
  'Meta': <class 'friendships.hbase_models.HBaseFollowing.Meta'>, '__doc__': None}
 
-2. field_hash = {field:field_obj}: field_obj 必须是 HBaseField 的实例
+2. field_hash = {key:field}: field 必须是 HBaseField 的实例
 {'from_user_id': <django_hbase.models.fields.IntegerField object at 0xffffb2bc47c0>,
  'created_at': <django_hbase.models.fields.TimestampField object at 0xffffb2bc4880>,
  'to_user_id': <django_hbase.models.fields.IntegerField object at 0xffffb2bc48e0>,}
