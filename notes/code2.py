@@ -104,7 +104,7 @@ from_user_id    数据库列               接收用户 ID（整数）
             model = Comment
             fields = ('id', 'tweet_id', 'user', 'content', 'created_at',)
             # fields =
-            # 1 'tweet_id' ｜ 'tweet': 都只展示 tweet id
+            # 1 'tweet_id' | 'tweet': 都只展示 tweet id
             # 2 'user' {user = UserSerializer()}: 展示 user 的详细信息
 
 2 查询中可以灵活使用 from_user 或 from_user_id

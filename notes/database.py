@@ -24,8 +24,8 @@ print(qs.query)
 3. DROP FOREIGN KEY CONSTRAINT {TODO [HARD]}
 
 4. N + 1 Queries: 1个 API request 对应 常数级别的 DB queries [10次]
-    例子: newsfeeds.services｜friendships.services | comments.api.views
-    例子: utils.redis_helper| 
+    例子: newsfeeds.services | friendships.services | comments.api.views
+    例子: utils.redis_helper |
     ❌for 循环 {Query 多次查找}, ✅prefetch_related
     ❌for 循环 {Query 多次插入}, ✅bulk_create
     ❌for 循环 {redis 多次插入}, ✅conn.rpush(key, *serialized_list)
