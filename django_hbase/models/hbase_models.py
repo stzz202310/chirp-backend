@@ -237,8 +237,8 @@ class HBaseModel:
     @classmethod
     def filter(cls, start=None, stop=None, prefix=None, limit=None, reverse=False):
         # start|stop|prefix=(from_user_id, created_at)
-        # results = HBaseFollowing.filter(prefix=(1, None, None), limit=2, reverse=True)
-        # results = HBaseFollowing.filter(start=(1, results[1].created_at, None), limit=2, reverse=True)
+        # results = HBaseFollowing.filter(prefix=(1,), limit=2, reverse=True)
+        # results = HBaseFollowing.filter(start=(1, results[1].created_at), limit=2, reverse=True)
 
         # serialize tuple to str
         row_start = cls.serialize_row_key_from_tuple(row_key_tuple=start)

@@ -8,6 +8,9 @@ from tweets.models import Tweet
 
 
 class CommentSerializer(serializers.ModelSerializer):
+    # 可以通过 source=xxx 指定去访问 model instance 的 xxx property
+    # 即 model_instance.xxx [comment_instance.cached_user] 来获得数据
+    # https://www.django-rest-framework.org/api-guide/serializers/#specifying-fields-explicitly
     user = UserSerializerForComment(source='cached_user')
     # has_liked: 当前登陆用户request.user 是否赞过这个 comment
     has_liked = serializers.SerializerMethodField()

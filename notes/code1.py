@@ -157,7 +157,7 @@ class Serializer(serializers.ModelSerializer):
     def update(self, instance, validated_data): return instance [修改后的 instance]
 
 
-1 序列化（将对象 -> JSON/字典）
+1 序列化（将对象 -> JSON/字典/字符串str）
     serializer = LoginSerializer(instance=user)
     serializer.data  # 得到序列化后的字典
     
@@ -270,6 +270,10 @@ def cancel(self):
 
 likes_count = serializers.SerializerMethodField()
 def get_likes_count(self, obj):
+
+user = serializers.SerializerMethodField()
+def get_user(self, obj):    # obj: model obj
+    return UserSerializerForFriendship(instance=user).data
 ------------------------------------------------------------
 
 """
