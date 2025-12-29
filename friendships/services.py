@@ -1,7 +1,11 @@
+import time
+
 from django.conf import settings
 from django.core.cache import caches
 
+from friendships.hbase_models import HBaseFollowing, HBaseFollower
 from friendships.models import Friendship
+from gatekeeper.models import Gatekeeper
 from twitter.cache import FOLLOWINGS_PATTERN
 
 cache = caches['testing'] if settings.TESTING else caches['default']
@@ -84,3 +88,33 @@ class FriendshipService(object):
     def invalidate_following_cache(cls, from_user_id):
         key = FOLLOWINGS_PATTERN.format(user_id=from_user_id)
         cache.delete(key)
+
+    @classmethod
+    def follow(cls, from_user_id, to_user_id):
+        if from_user_id == to_user_id:
+            return None
+
+        if not Gatekeeper.is_switch_on('switch_friendship_to_hbase'):
+            # 1. create data in MySQL
+            friendship = Friendship.objects.create(
+                # Friendship.objects.create(from_user=user_obj)
+                # Friendship.objects.create(from_user_id=1)
+                from_user_id=from_user_id,
+                to_user_id=to_user_id,
+            )
+            return friendship
+
+        # 2. create data in hbase
+        # 关注关系需要同时写入 HBaseFollower 和  HBaseFollowing 两张表
+        # 两张表结构一致[仅 RowKey 设计不同, 用于支持高效的双向查询], 返回任意一个即可
+        now = int(time.time() * 1000000)
+        HBaseFollower.create(
+            from_user_id=from_user_id,
+            to_user_id=to_user_id,
+            created_at=now,
+        )
+        return HBaseFollowing.create(
+            from_user_id=from_user_id,
+            to_user_id=to_user_id,
+            created_at=now,
+        )
