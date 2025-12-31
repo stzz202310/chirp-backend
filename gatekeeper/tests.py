@@ -5,6 +5,7 @@ from testing.testcases import TestCase
 class GatekeeperTests(TestCase):
 
     def setUp(self):
+        # super(GatekeeperTests, self).setUp()
         self.clear_cache()
 
     def test_gatekeeper(self):

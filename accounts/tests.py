@@ -5,7 +5,7 @@ from testing.testcases import TestCase
 class UserProfileTests(TestCase):
 
     def setUp(self):
-        self.clear_cache()
+        super(UserProfileTests, self).setUp()
 
     def test_profile_property(self):
         taotao = self.create_user(username='taotao')

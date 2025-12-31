@@ -4,13 +4,15 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.api.serializers import UserSerializerForFriendship
 from accounts.services import UserService
-from friendships.models import Friendship
 from friendships.services import FriendshipService
 
 
 class BaseFriendshipSerializer(serializers.Serializer):
+    # 某个用户的粉丝列表的某一行数据 FollowerSerializer : user = friendship_obj.from_user
+    # 某个用户的关注列表的某一行数据 FollowingSerializer: user = friendship_obj.to_user
     user = serializers.SerializerMethodField()
     created_at = serializers.SerializerMethodField()
+    # has_followed: 当前登陆用户[request.user] 是否已经关注 user
     has_followed = serializers.SerializerMethodField()
     """
     Friendship 表: {字段 from_user, to_user, created_at}
@@ -31,19 +33,13 @@ class BaseFriendshipSerializer(serializers.Serializer):
        - 不能继续使用 serializers.ModelSerializer 绑定 models.py
        - 改为使用 serializers.Serializer，与 ORM 解耦
        
-    3. serializers.Serializer 需要手动实现：
+    3. serializers.Serializer 需要手动实现的内容：
        - 字段定义 (fields = serializers.SerializerMethodField())
        - create() / update() 方法
        - 数据读写逻辑 [def create(): FriendshipService.follow(...)]
-
-    三 设计取舍说明
-    - serializers.ModelSerializer：
-        - 优点：自动生成字段和 CRUD，开发成本低
-        - 缺点：强依赖 Django ORM，不利于多数据库兼容
-    
-    - serializers.Serializer + SerializerMethodField：
-        - 优点：更灵活，可同时支持 MySQL / HBase
-        - 缺点：需要手动实现更多逻辑，代码更“裸露”
+           
+       - 优点：更灵活，可同时支持 MySQL / HBase
+       - 缺点：需要手动实现更多逻辑，代码更“裸露”        
     """
 
     def update(self, instance, validated_data):
@@ -64,8 +60,6 @@ class BaseFriendshipSerializer(serializers.Serializer):
         pass
 
     def get_user_id(self, obj):
-        # FollowerSerializer : return obj.from_user_id
-        # FollowingSerializer: return obj.to_user_id
         raise NotImplementedError
 
     def _get_following_user_id_set(self):
@@ -106,35 +100,22 @@ class FollowingSerializer(BaseFriendshipSerializer): # 关注列表
         return obj.to_user_id
 
 
-class FriendShipSerializerForCreate(serializers.ModelSerializer):
+class FriendShipSerializerForCreate(serializers.Serializer):
     from_user_id = serializers.IntegerField()
     to_user_id = serializers.IntegerField()
-
-    class Meta:
-        model = Friendship
-        fields = ('from_user_id', 'to_user_id',)
 
     def validate(self, attrs):
         from_user_id = attrs.get('from_user_id')
         to_user_id = attrs.get('to_user_id')
 
         if from_user_id == to_user_id:
-            raise ValidationError({
-                'message': 'You can not follow yourself!',
-            })
+            raise ValidationError({'message': 'You can not follow yourself!'})
 
         if not User.objects.filter(id=to_user_id).exists(): # 重复检查
-            raise ValidationError({
-                'message': 'You can not follow a non-existent user!',
-            })
+            raise ValidationError({'message': 'You can not follow a non-existent user!'})
 
-        if Friendship.objects.filter(
-            from_user_id=from_user_id,
-            to_user_id=to_user_id,
-        ).exists():
-            raise ValidationError({
-                'message': 'You have already followed this user.',
-            })
+        # if Friendship.objects.filter(from_user_id=from_user_id,to_user_id=to_user_id).exists():
+        #     raise ValidationError({'message': 'You have already followed this user.'})
 
         return attrs
 
@@ -146,3 +127,6 @@ class FriendShipSerializerForCreate(serializers.ModelSerializer):
             to_user_id=to_user_id,
         )
         return friendship
+
+    def update(self, instance, validated_data):
+        pass

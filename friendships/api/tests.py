@@ -1,9 +1,9 @@
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from friendships.api.paginations import FriendshipPagination
-from friendships.models import Friendship
+from friendships.services import FriendshipService
 from testing.testcases import TestCase
+from utils.paginations import EndlessPagination
 
 FOLLOW_URL = '/api/friendships/{}/follow/'
 UNFOLLOW_URL = '/api/friendships/{}/unfollow/'
@@ -14,7 +14,7 @@ FOLLOWINGS_URL = '/api/friendships/{}/followings/'
 class FriendshipApiTests(TestCase):
 
     def setUp(self):
-        self.clear_cache()
+        super(FriendshipApiTests, self).setUp()
         self.taotao = self.create_user('taotao')
         self.taotao_client = APIClient()
         self.taotao_client.force_authenticate(self.taotao)
@@ -26,10 +26,10 @@ class FriendshipApiTests(TestCase):
         # create followings and followers for zhuzhu
         for i in range(2):
             follower = self.create_user(f'zhuzhu_follower{i}')
-            Friendship.objects.create(from_user=follower,to_user=self.zhuzhu)
+            self.create_friendship(from_user=follower, to_user=self.zhuzhu)
         for i in range(3):
             following = self.create_user(f'zhuzhu_following{i}')
-            Friendship.objects.create(from_user=self.zhuzhu,to_user=following)
+            self.create_friendship(from_user=self.zhuzhu, to_user=following)
 
     def test_follow(self):
         url = FOLLOW_URL.format(self.taotao.id)
@@ -37,12 +37,15 @@ class FriendshipApiTests(TestCase):
         # 1. 需要登陆才能 follow 别人
         response = self.anonymous_client.post(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
         # 2. 需要用 get 来 follow
         response = self.zhuzhu_client.get(url)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
         # 3. 不可以 follow 自己
         response = self.taotao_client.post(url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
         # 4. follow 成功
         response = self.zhuzhu_client.post(url)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -50,15 +53,20 @@ class FriendshipApiTests(TestCase):
         self.assertEqual('user' in response.data, True)
         self.assertEqual(response.data['user']['id'], self.taotao.id)
         self.assertEqual(response.data['user']['username'], self.taotao.username)
-        # 5. 重复 follow
+
+        # 5. 重复 follow 静默处理
         response = self.zhuzhu_client.post(url)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        # 6. 反向关注会创建新的数据
-        count = Friendship.objects.count()
-        url = FOLLOW_URL.format(self.zhuzhu.id)
-        response = self.taotao_client.post(url)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Friendship.objects.count(), count + 1)
+        self.assertEqual(response.data['duplicate'], True)
+
+        # 6. 反向关注会创建新的数据
+        before_count = FriendshipService.get_following_count(from_user_id=self.taotao.id)
+        url = FOLLOW_URL.format(self.zhuzhu.id)
+        response = self.taotao_client.post(path=url)
+        after_count = FriendshipService.get_following_count(from_user_id=self.taotao.id)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(after_count, before_count + 1)
+
         # 7. follow 不存在的用户
         url = FOLLOW_URL.format(1000)
         response = self.taotao_client.post(url)
@@ -70,25 +78,32 @@ class FriendshipApiTests(TestCase):
         # 1. 需要登陆才能 unfollow 别人
         response = self.anonymous_client.post(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
         # 2. 不能用 get 来 unfollow 别人
         response = self.zhuzhu_client.get(url)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
         # 3. 不能 unfollow 自己
         response = self.taotao_client.post(url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
         # 4. unfollow 成功
-        Friendship.objects.create(from_user=self.zhuzhu, to_user=self.taotao)
-        count = Friendship.objects.count()
-        response = self.zhuzhu_client.post(url)
+        self.create_friendship(from_user=self.zhuzhu, to_user=self.taotao)
+        before_count = FriendshipService.get_following_count(from_user_id=self.zhuzhu.id)
+        response = self.zhuzhu_client.post(path=url)
+        after_count = FriendshipService.get_following_count(from_user_id=self.zhuzhu.id)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['deleted'], 1)
-        self.assertEqual(Friendship.objects.count(), count - 1)
+        self.assertEqual(after_count, before_count - 1)
+
         # 5. 没有 follow 的情况下 unfollow 静默处理
-        count = Friendship.objects.count()
+        before_count = FriendshipService.get_following_count(from_user_id=self.zhuzhu.id)
         response = self.zhuzhu_client.post(url)
+        after_count = FriendshipService.get_following_count(from_user_id=self.zhuzhu.id)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['deleted'], 0)
-        self.assertEqual(Friendship.objects.count(), count)
+        self.assertEqual(after_count, before_count)
+
         # 6. unfollow 不存在的用户
         url = UNFOLLOW_URL.format(1000)
         response = self.taotao_client.post(url)
@@ -99,10 +114,12 @@ class FriendshipApiTests(TestCase):
         # 1. post is not allowed
         response = self.anonymous_client.post(url)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
         # 2. get is ok
         response = self.anonymous_client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 3)
+
         # 3. 确保按照时间倒序
         ts0 = response.data['results'][0]['created_at']
         ts1 = response.data['results'][1]['created_at']
@@ -127,10 +144,12 @@ class FriendshipApiTests(TestCase):
         # 1. post is not allowed
         response = self.anonymous_client.post(url)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
         # 2. get is ok
         response = self.anonymous_client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 2)
+
         # 3. 确保按照时间倒序
         ts0 = response.data['results'][0]['created_at']
         ts1 = response.data['results'][1]['created_at']
@@ -145,65 +164,101 @@ class FriendshipApiTests(TestCase):
         )
 
     def test_followers_pagination(self):
-        max_page_size = FriendshipPagination.max_page_size
-        page_size = FriendshipPagination.page_size
+        page_size = EndlessPagination.page_size
+        friendships = []
         for i in range(page_size * 2):
             follower = self.create_user(username=f'taotao_follower{i}')
-            Friendship.objects.create(from_user=follower, to_user=self.taotao)
+            friendship = self.create_friendship(from_user=follower, to_user=self.taotao)
+            friendships.append(friendship)
             if follower.id % 2 == 0:
-                Friendship.objects.create(from_user=self.zhuzhu, to_user=follower)
+                self.create_friendship(from_user=self.zhuzhu, to_user=follower)
 
         url = FOLLOWERS_URL.format(self.taotao.id)
-        self._test_friendship_pagination(
-            url=url,
-            page_size=page_size,
-            max_page_size=max_page_size,
-        )
+        self._paginate_until_the_end(url=url, expect_pages=2, friendships=friendships)
 
         # anonymous hasn't followed any users
-        response = self.anonymous_client.get(path=url, data={'page': 1})
+        response = self.anonymous_client.get(path=url)
         for result in response.data['results']:
             self.assertEqual(result['has_followed'], False)
 
         # zhuzhu has followed users with even id
-        response = self.zhuzhu_client.get(path=url, data={'page': 1})
+        response = self.zhuzhu_client.get(path=url)
         for result in response.data['results']:
             has_followed = (result['user']['id'] % 2 == 0)
             self.assertEqual(result['has_followed'], has_followed)
 
     def test_followings_pagination(self):
-        max_page_size = FriendshipPagination.max_page_size
-        page_size = FriendshipPagination.page_size
+        page_size = EndlessPagination.page_size
+        friendships = []
         for i in range(page_size * 2):
             following = self.create_user(username=f'taotao_following{i}')
-            Friendship.objects.create(from_user=self.taotao, to_user=following)
+            friendship = self.create_friendship(from_user=self.taotao, to_user=following)
+            friendships.append(friendship)
             if following.id % 2 == 0:
-                Friendship.objects.create(from_user=self.zhuzhu, to_user=following)
+                self.create_friendship(from_user=self.zhuzhu, to_user=following)
 
         url = FOLLOWINGS_URL.format(self.taotao.id)
-        self._test_friendship_pagination(
-            url=url,
-            page_size=page_size,
-            max_page_size=max_page_size,
-        )
+        self._paginate_until_the_end(url=url, expect_pages=2, friendships=friendships)
 
         # anonymous hasn't followed any users
-        response = self.anonymous_client.get(path=url, data={'page': 1})
+        response = self.anonymous_client.get(path=url)
         for result in response.data['results']:
             self.assertEqual(result['has_followed'], False)
 
         # zhuzhu has followed users with even id
-        response = self.zhuzhu_client.get(path=url, data={'page': 1})
+        response = self.zhuzhu_client.get(path=url)
         for result in response.data['results']:
             has_followed = (result['user']['id'] % 2 == 0)
             self.assertEqual(result['has_followed'], has_followed)
 
         # taotao has followed all his following users
-        response = self.taotao_client.get(path=url, data={'page': 1})
+        response = self.taotao_client.get(path=url)
         for result in response.data['results']:
             self.assertEqual(result['has_followed'], True)
 
+        # test pull new friendships
+        last_created_at = friendships[-1].created_at
+        response = self.taotao_client.get(path=url, data={'created_at__gt': last_created_at})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 0)
+
+        new_friends = [self.create_user(username=f'big_v{i}') for i in range(3)]
+        new_friendships = []
+        for new_friend in new_friends:
+            new_friendships.append(self.create_friendship(from_user=self.taotao, to_user=new_friend))
+        response = self.taotao_client.get(path=url, data={'created_at__gt': last_created_at})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 3)
+        for result, friendship in zip(response.data['results'], reversed(new_friendships)):
+            self.assertEqual(result['created_at'], friendship.created_at)
+            self.assertEqual(result['user']['id'], friendship.to_user_id)
+
+    def _paginate_until_the_end(self, url, expect_pages, friendships):
+        results, pages = [], 0
+        response = self.anonymous_client.get(path=url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results.extend(response.data['results'])
+        pages += 1
+
+        while response.data['has_next_page']:
+            last_item = response.data['results'][-1]
+            response = self.anonymous_client.get(
+                path=url,
+                data={'created_at__lt': last_item['created_at']}
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            results.extend(response.data['results'])
+            pages += 1
+
+        self.assertEqual(len(results), len(friendships))
+        self.assertEqual(pages, expect_pages)
+
+        # friendship is in ascending order, results is in descending order
+        for result, friendship in zip(results, friendships[::-1]):
+            self.assertEqual(result['created_at'], friendship.created_at)
+
     def _test_friendship_pagination(self, url, page_size, max_page_size):
+        # ⚠️ legacy function
         response = self.anonymous_client.get(path=url, data={'page': 1})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), page_size)

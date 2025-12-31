@@ -7,7 +7,7 @@ from testing.testcases import TestCase
 class NotificationServiceTests(TestCase):
 
     def setUp(self):
-        self.clear_cache()
+        super(NotificationServiceTests, self).setUp()
         self.taotao = self.create_user('taotao')
         self.zhuzhu = self.create_user('zhuzhu')
         self.taotao_tweet = self.create_tweet(user=self.taotao)

@@ -34,7 +34,12 @@ class Friendship(models.Model):
             ('from_user', 'created_at'), # 关注列表 from_user=我: 获取我关注的所有人，按照关注时间排序
             ('to_user', 'created_at'),   # 粉丝列表 to_user=我:   获取关注我的所有人，按照关注时间排序
         )
-        unique_together = (('from_user', 'to_user'),)   # 数据库层面 防止 重复关注
+        # instance.save() → SQL INSERT/UPDATE 时检查 Django model {models.py}
+        # 1. content = models.TextField(max_length=140)
+        # 2. unique_together [数据库层面 防止 重复关注]
+        # 5XX 错误: (1062, "Duplicate entry '1-2' for key
+        #   'friendships_friendship.friendships_friendship_from_user_id_to_user_id_c3116feb_uniq'")
+        unique_together = (('from_user', 'to_user'),)
         ordering = ('-created_at',) # 对所有的查询结果 QuerySet 都有效
 
     def __str__(self):

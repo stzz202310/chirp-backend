@@ -54,7 +54,7 @@ def fanout_newsfeeds_main_task(self, tweet_id, tweet_user_id):
     NewsFeed.objects.create(user_id=tweet_user_id, tweet_id=tweet_id)
 
     # 获得所有的 follower ids, 按照 batch size 拆分开
-    follower_ids = FriendshipService.get_follower_ids(to_user_id=tweet_user_id)
+    follower_ids = FriendshipService.get_follower_user_id_list(to_user_id=tweet_user_id)
     index = 0
     while index < len(follower_ids):
         batch_ids = follower_ids[index: index + FANOUT_BATCH_SIZE]

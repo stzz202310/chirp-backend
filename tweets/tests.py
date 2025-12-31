@@ -13,7 +13,7 @@ from utils.time_helpers import utc_now
 class TweetTests(TestCase):
 
     def setUp(self):
-        self.clear_cache()
+        super(TweetTests, self).setUp()
         self.taotao = self.create_user('taotao')
         self.zhuzhu = self.create_user('zhuzhu')
         self.tweet = self.create_tweet(user=self.taotao, content='hello zhuzhu')
@@ -61,7 +61,7 @@ class TweetTests(TestCase):
 class TweetServiceTests(TestCase):
 
     def setUp(self):
-        self.clear_cache()
+        super(TweetServiceTests, self).setUp()
         self.taotao = self.create_user(username='taotao')
 
     def test_get_user_tweets(self):

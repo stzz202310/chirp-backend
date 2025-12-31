@@ -5,6 +5,7 @@ from utils.redis_client import RedisClient
 class UtilsTests(TestCase):
 
     def setUp(self):
+        # super(UtilsTests, self).setUp()
         self.clear_cache()
 
     def test_redis_client(self):

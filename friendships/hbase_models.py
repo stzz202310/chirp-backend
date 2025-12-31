@@ -23,6 +23,23 @@ class HBaseFollowing(models.HBaseModel):
         row_key = ('from_user_id', 'created_at')
         table_name = 'twitter_followings'
 
+    def save(self):
+        # HBase Model: 不走 Django ORM [pre_delete / post_save 不会自动触发]
+        # 正确做法：在「写 / 删 HBase」的地方主动失效缓存
+        # TODO [Myself] 若未来支持批量写/删(多RowKey), 这里需要失效多条缓存
+        from friendships.services import FriendshipService
+        FriendshipService.invalidate_following_cache(from_user_id=self.from_user_id)
+        super(HBaseFollowing, self).save()
+
+    @classmethod
+    def delete(cls, **kwargs):
+        from friendships.services import FriendshipService
+        from_user_id = kwargs.get('from_user_id')
+        if from_user_id is not None:
+            FriendshipService.invalidate_following_cache(from_user_id=from_user_id)
+        # ⚠️ 一定要把 kwargs 继续传下去
+        return super(HBaseFollowing, cls).delete(**kwargs)
+
 
 class HBaseFollower(models.HBaseModel):
     # row key

@@ -15,7 +15,7 @@ USER_PROFILE_DETAIL_URL = '/api/profiles/{}/'
 class AccountApiTests(TestCase):
 
     def setUp(self):
-        self.clear_cache()
+        super(AccountApiTests, self).setUp()
         self.client = APIClient()   # 类似 手动测试时的浏览器
         self.user = self.create_user(
             username='tester',

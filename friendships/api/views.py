@@ -6,13 +6,16 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
-from friendships.api.paginations import FriendshipPagination
 from friendships.api.serializers import (
     FollowingSerializer,
     FollowerSerializer,
     FriendShipSerializerForCreate,
 )
+from friendships.hbase_models import HBaseFollowing, HBaseFollower
 from friendships.models import Friendship
+from friendships.services import FriendshipService
+from gatekeeper.models import Gatekeeper
+from utils.paginations import EndlessPagination
 
 
 class FriendshipViewSet(viewsets.GenericViewSet):
@@ -26,47 +29,67 @@ class FriendshipViewSet(viewsets.GenericViewSet):
     queryset = User.objects.all()
     serializer_class = FriendShipSerializerForCreate
     # 一般来说，不同的 views 所需要的 pagination 规则肯定是不同的，因此一般都需要自定义
-    pagination_class = FriendshipPagination
+    pagination_class = EndlessPagination
 
     @action(methods=['GET'], detail=True, permission_classes=[AllowAny])
     @method_decorator(ratelimit(key='user_or_ip', rate='3/s', method='GET', block=True))
+    # GET /api/friendships/{pk}/followers/  GET {pk} 的粉丝列表
     def followers(self, request, pk):
-        # GET /api/friendships/{pk}/followers/  GET {pk} 的粉丝列表
-        friendships = Friendship.objects.filter(to_user_id=pk)
-        # self.paginator: 根据 pagination_class 新建的属性
-        # def paginate_queryset(self, queryset):
-        #   if self.paginator is None: return None
-        #   return self.paginator.paginate_queryset(queryset, self.request, view=self)
-        page = self.paginate_queryset(queryset=friendships)
+        # self.paginator: DRF 基于 pagination_class 创建的, 已绑定上下文的分页实例
+        # 统一通过 self.paginator 调用分页相关方法
+        pk = int(pk)
+        user = self.get_object()
+        paginator = self.paginator
+        if Gatekeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
+            page = paginator.paginate_hbase(hb_model=HBaseFollower, row_key_prefix=(pk,), request=request)
+        else:
+            friendships = Friendship.objects.filter(to_user_id=pk).order_by('-created_at')
+            page = paginator.paginate_queryset(queryset=friendships, request=request)
+
+        # page: 当前页的 instances 集合 (list 或 queryset)
         serializer = FollowerSerializer(instance=page, many=True, context={'request': request})
-        return self.get_paginated_response(data=serializer.data)
+        return paginator.get_paginated_response(data=serializer.data)   # 返回当前页
 
     @action(methods=['GET'], detail=True, permission_classes=[AllowAny])
     @method_decorator(ratelimit(key='user_or_ip', rate='3/s', method='GET', block=True))
     def followings(self, request, pk):  # GET {pk} 的关注列表
-        friendships = Friendship.objects.filter(from_user_id=pk)
-        page = self.paginate_queryset(queryset=friendships)
+        pk = int(pk)
+        user = self.get_object()
+        paginator = self.paginator
+        if Gatekeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
+            page = paginator.paginate_hbase(hb_model=HBaseFollowing, row_key_prefix=(pk,), request=request)
+        else:
+            friendships = Friendship.objects.filter(from_user_id=pk).order_by('-created_at')
+            page = paginator.paginate_queryset(queryset=friendships, request=request)
+
         serializer = FollowingSerializer(instance=page, many=True, context={'request': request})
-        return self.get_paginated_response(data=serializer.data) # 返回当前页
+        return paginator.get_paginated_response(data=serializer.data)
 
     @action(methods=['POST'], detail=True, permission_classes=[IsAuthenticated])
     @method_decorator(ratelimit(key='user', rate='10/s', method='POST', block=True))
     def follow(self, request, pk):
+        # 注意 pk 的类型是 str, 所以要做类型转换 int(pk)
+        # get_object_or_404(): check if ⚠️User (not Friendship) with id=pk exists
+        from_user_id = request.user.id
+        to_user_id = int(pk)
+        follow_user = self.get_object()
+
         # 特殊判断重复 follow 的情况（比如前端猛点好多少次 follow)
         # 静默处理，不报错，因为这类重复操作因为网络延迟的原因会比较多，没必要当做错误处理
-        # if Friendship.objects.filter(from_user=request.user, to_user=pk).exists():
-        #     return Response({
-        #         'success': True,
-        #         'duplicate': True,
-        #     }, status=status.HTTP_201_CREATED)
+        if FriendshipService.has_followed(from_user_id=from_user_id, to_user_id=to_user_id):
+            return Response(
+                data={'success': True, 'duplicate': True},
+                status=status.HTTP_201_CREATED,
+            )
 
-        # get_object_or_404(): check if user with id=pk exists
-        follow_user = self.get_object()
         serializer = FriendShipSerializerForCreate(data={
-            'from_user_id': request.user.id,
-            'to_user_id': follow_user.id, # pk
+            'from_user_id': from_user_id,
+            'to_user_id': to_user_id,   # follow_user.id
         })
         if not serializer.is_valid():
+            # [serializers.ModelSerializer] serializer.validate() 会校验模型约束，
+            # 其中包括 unique_together = (('from_user', 'to_user'),)
+            # 用于防止同一对用户关系被重复创建
             return Response(data={
                 'success': False,
                 'message': 'Please check input.',
@@ -77,36 +100,23 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         # /localhost/admin/ 如果对 Friendship 进行修改，则无法触发 '删除缓存'
         # FriendshipService.invalidate_following_cache(request.user.id)
         return Response(
-            data=FollowingSerializer(
-                instance=friendship,
-                context={'request': request}
-            ).data,
+            data=FollowingSerializer(instance=friendship, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
         )
 
     @action(methods=['POST'], detail=True, permission_classes=[IsAuthenticated])
     @method_decorator(ratelimit(key='user', rate='10/s', method='POST', block=True))
     def unfollow(self, request, pk):
+        from_user_id = request.user.id
         unfollow_user = self.get_object()
-        # 注意 pk 的类型是 str, 所以要做类型转换 int(pk)
-        if request.user.id == unfollow_user.id:
+
+        if from_user_id == unfollow_user.id:    # int(pk)
             return Response(data={
                 'success': False,
                 'message': 'You cannot unfollow yourself',
             }, status=status.HTTP_400_BAD_REQUEST,)
 
-        # https://docs.djangoproject.com/en/3.1/ref/models/querysets/#delete
-        # Queryset 的 delete 操作返回两个值，一个是删了多少数据，一个是具体每种类型删了多少
-        # 为什么会出现多种类型数据的删除？因为可能因为 foreign key 设置了 cascade 出现级联
-        # 删除，也就是比如 A model(学生) 的某个属性是 B model(班级) 的 foreign key，并且设置了
-        # on_delete=models.CASCADE, 那么当 B 的某个数据被删除的时候，A 中的关联也会被删除。
-        # 所以 CASCADE 是很危险的，我们一般最好不要用，而是用 on_delete=models.SET_NULL
-        # 取而代之，这样至少可以避免误删除操作带来的多米诺效应。
-        deleted, _ = Friendship.objects.filter(
-            from_user=request.user,
-            to_user=unfollow_user,
-        ).delete()  # 没有 follow 的情况下 unfollow 静默处理
-        # FriendshipService.invalidate_following_cache(request.user.id)
+        deleted = FriendshipService.unfollow(from_user_id=from_user_id, to_user_id=unfollow_user.id)
         return Response(data={'success': True, 'deleted': deleted,})
 
     def list(self, request):

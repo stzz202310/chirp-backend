@@ -188,6 +188,12 @@ class HBaseModel:
     # TODO [Homework] 实现一个 get_or_create 的方法，返回 (instance, created)
 
     @classmethod
+    def delete(cls, **kwargs):
+        row_key = cls.serialize_row_key(data=kwargs)
+        table = cls.get_table()
+        return table.delete(row=row_key)
+
+    @classmethod
     def get_table_name(cls):
         if not cls.Meta.table_name:
             # NotImplementedError: 这个方法在当前类中没有实现，调用者应该在子类中实现它
@@ -262,27 +268,40 @@ class HBaseModel:
             instances.append(instance)
         return instances
 
-
 """
 MySQL vs HBase 设计对比: friendships_friendship Table
 
-1. MySQL
-Friendship: id, from_user_id, to_user_id, created_at
-index_together: 
-    ('from_user', 'created_at'),
-    ('to_user', 'created_at'),
-    每个联合索引在底层都相当于一棵独立的 B+Tree [可以理解为"额外的一张索引表"]
+一 表结构
+MySQL (Django ORM)
+  - 表字段: id, from_user_id, to_user_id, created_at
+  - index_together: ('from_user', 'created_at'), ('to_user', 'created_at')
+  - 本质: 每个联合索引 = 一棵独立的 B+Tree [可以理解为"额外的一张索引表"]
+         1 张数据表 + 2 个联合索引 ≈ 3 份有序数据结构
 
-1 张数据表 + 2 个联合索引 ≈ 3 份有序数据结构
+HBase
+  - 无二级索引, 每一个"index_together"都需要 单独一张表
+  - 查询能力由 RowKey 决定: RK = 查询条件的组合（等值 + 范围）
+     RK1 = from_user_id
+     RK2 = from_user_id + created_at
+     RK1: 仅支持 from_user_id = XX, 不支持 created_at 做范围查询
+     RK2: 等价于 MySQL index_together ('from_user', 'created_at')
 
-2. HBase
-  a. HBase 没有二级索引, 每一个"index_together"都需要 单独一张表
-  b. RowKey 通常由多个字段组合，用来支持等值 + 范围查询 [RK = 查询条件的组合]
 
-RK1 = from_user_id
-RK2 = from_user_id + created_at
-RK1: 只能查 from_user_id = XX, 不支持 created_at 做范围查询
-RK2: 支持的查询等同于 index_together ('from_user', 'created_at')
+二 Meta 行为对比 [HBase]
+- index_together: 通过 RowKey 设计 + 多表实现 (例如 HBaseFollower + HBaseFollowing 表设计)
+- unique_together: 无数据库级约束，需要在应用层自行保证唯一性
+- ordering: 基于 RowKey 的字典序排序 (字符串排序规则)
+
+
+三 Signal / 缓存失效机制
+MySQL (Django ORM)
+  - model.save()   → pre_save / post_save
+  - model.delete() → pre_delete / post_delete
+  - Django 自动发送 signal
+
+HBase Model
+  - 不走 Django ORM [pre_delete / post_save 不会自动触发]
+  - 正确做法：在「写 / 删 HBase」的地方主动失效缓存
 
 ==================================================================================
 
@@ -299,6 +318,7 @@ field:  <django_hbase.models.fields.IntegerField object at 0xffffb2bc47c0>
 
 str|bytes   table.put(row=self.row_key, data=row_data)
 str|bytes   row_data = table.row(row=row_key)
+str|bytes   table.delete(row=row_key)
 ⚠️ bytes    table.scan(row_start, row_stop, row_prefix)
 
 conn.tables()                           # Return a list of table names available in this HBase instance
