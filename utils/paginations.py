@@ -3,6 +3,8 @@ from django.conf import settings
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
+from utils.time_constants import MAX_TIMESTAMP
+
 
 class EndlessPagination(PageNumberPagination):
     page_size = 20 if not settings.TESTING else 10
@@ -45,12 +47,12 @@ class EndlessPagination(PageNumberPagination):
 
         if 'created_at__lt' in request.query_params:
             # [底部]上拉加载更多 Load More
-            # created_at__lt 用于向上滚屏 (往下翻页) 的时候加载下一页的数据
+            # created_at__lt 用于向上滚屏 (往下翻页) 的时候加载下一页的数据(旧数据)
             # 寻找 created_at < created_at__lt 的 objects 里按照 created_at 倒序的
             # 前 page_size + 1 个 objects
-            # 比如目前的 created_at 列表是 [10, 9, 8, 7, ... 1]
-            # 如果 created_at__lt=10, page_size=2 则应该返回 [9, 8, 7], 多返回一个 object 的
-            # 原因是为了判断是否还有下一页从而减少一次空加载|空刷
+            # 比如目前的 created_at 列表是 [10, 9, 8, 7, ... 1] (⚠️ MySQL 和 HBase 的 ordering)
+            # 如果 created_at__lt=10, page_size=2 则应该返回 [9, 8, 7],
+            # 多返回一个 object 是为了判断是否还有下一页从而减少一次空加载|空刷
             created_at__lt = request.query_params['created_at__lt']
             queryset = queryset.filter(created_at__lt=created_at__lt)
 
@@ -58,6 +60,74 @@ class EndlessPagination(PageNumberPagination):
         queryset = queryset.order_by('-created_at')[:self.page_size + 1]
         self.has_next_page = len(queryset) > self.page_size
         return queryset[:self.page_size]
+
+    def paginate_hbase(self, hb_model, row_key_prefix, request):
+        if 'created_at__gt' in request.query_params:
+            created_at__gt = request.query_params['created_at__gt']
+            start = (*row_key_prefix, created_at__gt)
+            stop = (*row_key_prefix, MAX_TIMESTAMP)
+            objects = hb_model.filter(start=start, stop=stop)
+            if len(objects) and objects[0].created_at == int(created_at__gt):
+                # [start:stop:step] [start, stop)
+                # [1, 2, 3] => [3, 2]
+                objects = objects[:0:-1]
+            else:
+                objects = objects[::-1]
+            self.has_next_page = False
+            return objects
+
+        if 'created_at__lt' in request.query_params:
+            created_at__lt = request.query_params['created_at__lt']
+            start = (*row_key_prefix, created_at__lt)
+            stop = (*row_key_prefix, None)
+            """
+            1. limit = self.page_size + 2:
+                HBase 仅支持 <= created_at__lt 的查询条件, 不支持严格的小于(< created_at__lt)
+                (<= created_at__lt, limit=page_size+2) 等价于 (< created_at__lt, limit=page_size+1)
+            
+            2. HBase RowKey 为字符串字典序 (timestamp 从小到大)
+               若需要按 created_at 倒序('-created_at'), 需设置
+                a. objects = hb_model.filter(reverse=True)
+                b. objects = hb_model.filter(), objects = objects[::-1]
+            
+            3. HBase scan 范围查询 [start, stop)
+               示例 RowKey(user_id, created_at) 顺序：
+                  (1, ts1)
+                  (2, None) -> stop 必须在这里停止，否则会扫描到用户1的数据
+                  (2, ts1)  
+                  (2, ts2)  -> start
+                  (2, Max)
+                
+                - 正确设置 stop 可以避免越界读取其他用户的数据
+                - 可灵活使用 (1, None) 或 (1, 999999) 作为界限
+            """
+            objects = hb_model.filter(start=start, stop=stop, limit=self.page_size + 2, reverse=True)
+            if len(objects) and objects[0].created_at == int(created_at__lt):
+                # 如果第一条数据的 created_at 等于 created_at__lt, 则去掉第一条，避免重复返回
+                objects = objects[1:]
+            if len(objects) > self.page_size:
+                self.has_next_page = True
+                # objects = objects[:-1]
+                # 删除最后一条数据的旧方法，可能不够安全
+                # 场景：
+                #   - 第一条数据的 created_at != created_at__lt
+                #   - 查询返回了 self.page_size + 2 条数据
+                # 更安全的做法：
+                #   - 直接截取前 self.page_size 条
+                objects = objects[:self.page_size]
+            else:
+                self.has_next_page = False
+            return objects
+
+        # 没有任何参数，默认加载最新的一页
+        prefix = (*row_key_prefix, None)
+        objects = hb_model.filter(prefix=prefix, limit=self.page_size + 1, reverse=True)
+        if len(objects) > self.page_size:
+            self.has_next_page = True
+            objects = objects[:-1]
+        else:
+            self.has_next_page = False
+        return objects
 
     def paginate_cached_list(self, cached_list, request):
         paginated_list = self.paginate_ordered_list(

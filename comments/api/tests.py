@@ -15,7 +15,7 @@ NEWSFEED_LIST_API = '/api/newsfeeds/'
 class CommentAPITest(TestCase):
 
     def setUp(self):
-        self.clear_cache()
+        super(CommentAPITest, self).setUp()
         self.taotao, self.taotao_client = self.create_user_and_client(username='taotao')
         self.zhuzhu, self.zhuzhu_client = self.create_user_and_client(username='zhuzhu')
 

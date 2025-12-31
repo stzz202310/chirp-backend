@@ -6,7 +6,8 @@ from rest_framework.test import APIClient
 
 from comments.models import Comment
 from django_hbase.models import HBaseModel
-from friendships.models import Friendship
+from friendships.services import FriendshipService
+from gatekeeper.models import Gatekeeper
 from likes.models import Like
 from newsfeeds.models import NewsFeed
 from tweets.models import Tweet
@@ -127,6 +128,7 @@ class TestCase(DjangoTestCase):
     def clear_cache(self):
         caches['testing'].clear()
         RedisClient.clear()
+        # Gatekeeper.set_kv(gk_name='switch_friendship_to_hbase', key='percent', value=100)
 
     @property
     def anonymous_client(self):
@@ -176,7 +178,7 @@ class TestCase(DjangoTestCase):
         return user, client
 
     def create_friendship(self, from_user, to_user):
-        return Friendship.objects.create(from_user=from_user, to_user=to_user)
+        return FriendshipService.follow(from_user_id=from_user.id, to_user_id=to_user.id)
 
     def create_tweet(self, user, content=None):
         if content is None:
