@@ -162,14 +162,17 @@ class HBaseModel:
     def row_key(self):
         return self.serialize_row_key(data=self.__dict__)
 
-    def save(self):
+    def save(self, batch=None):
         row_data = self.serialize_row_data(data=self.__dict__)
         # 如果 row_data={column key:value} 为空, hbase 会直接不存储这个 row_key
         # 因此我们可以 raise 一个 exception 提醒调用者, 避免储存空值
         if len(row_data) == 0:
             raise EmptyColumnError()
-        table = self.get_table()
-        table.put(row=self.row_key, data=row_data)
+        if batch:
+            batch.put(row=self.row_key, data=row_data)
+        else:
+            table = self.get_table()
+            table.put(row=self.row_key, data=row_data)
 
     @classmethod
     def get(cls, **kwargs):
@@ -181,11 +184,52 @@ class HBaseModel:
         return instance
 
     @classmethod
-    def create(cls, **kwargs):
+    def create(cls, batch=None, **kwargs):
         instance = cls(**kwargs)    # 调用构造函数 __init__
-        instance.save()
+        instance.save(batch=batch)
         return instance
     # TODO [Homework] 实现一个 get_or_create 的方法，返回 (instance, created)
+
+    @classmethod
+    def batch_create(cls, batch_data):
+        """""""""
+        HBase Batch 写入机制笔记
+
+        Batch 是 HBase 客户端提供的批量写入工具，用于提升写入性能。
+        核心思想: 先在客户端内存中累积 put / delete 操作, 再一次性通过 RPC 发送给 HBase Server。
+
+        一. RPC（Remote Procedure Call）
+        - 客户端与 HBase Server 之间的每一次真正写入，都是一次 RPC
+        - 单条 put = 1 次 RPC（性能较差）
+        - 使用 Batch 让多条 put|delete 共用更少的 RPC (类似于 bulk_create, 节省 round trip time)
+
+        二. Batch 的工作流程
+          batch.put(...)      # 仅缓存在客户端内存中
+          batch.delete(...)
+          ...
+          batch.send()        # 手动触发 flush，将操作真正发送到 HBase
+          在调用 batch.send() 之前，数据并未写入 HBase。
+
+        三. Batch 的触发方式（flush）
+            1. 手动触发: 显式调用 batch.send()
+               Batch = 客户端写入缓冲区
+               batch.send() = 手动 flush (真正发 RPC)
+
+            2. 自动触发: 当累计的 put|delete 数量达到 batch_size 时, 客户端会自动调用 batch.send()
+
+            3. 上下文管理器 (推荐)
+                with table.batch(...) as batch:
+                    batch.put(...)
+                    ...
+                # 离开 with 块时，自动调用 batch.send()
+        """
+        table = cls.get_table()
+        batch = table.batch()   # table 的信息已经在 batch 内部, batch 操作只会作用在这个 table 上
+        instances = []
+        for data in batch_data:
+            instances.append(cls.create(batch=batch, **data))
+        batch.send()
+        return instances
 
     @classmethod
     def delete(cls, **kwargs):

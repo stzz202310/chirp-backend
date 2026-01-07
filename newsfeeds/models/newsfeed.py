@@ -1,3 +1,8 @@
+"""
+Deprecated
+use newsfeeds.models.hbase_models.HBaseNewsFeed instead
+"""
+
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models.signals import post_save
@@ -8,8 +13,9 @@ from utils.memcached_helper import MemcachedHelper
 
 
 class NewsFeed(models.Model):
-    # 注意: user follow 了 tweet 的发帖人，所以 user's newsfeeds 有这个帖子
-    # user 是 request.user, 不需要缓存
+    # user: 不是存储谁发了这条 tweet，而是谁可以看到这条 tweet
+    # user follow 了 tweet 的发帖人，所以 user 的新鲜事列表有这个帖子
+    # user 一般是 request.user, 不需要读取缓存
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     tweet = models.ForeignKey(Tweet, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
