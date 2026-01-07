@@ -1,6 +1,6 @@
 import time
 from django.conf import settings
-from friendships.hbase_models import HBaseFollowing
+from friendships.models import HBaseFollowing
 
 def ts_now():
     return int(time.time() * 1000000)

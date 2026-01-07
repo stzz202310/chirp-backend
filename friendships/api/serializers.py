@@ -15,9 +15,23 @@ class BaseFriendshipSerializer(serializers.Serializer):
     # has_followed: 当前登陆用户[request.user] 是否已经关注 user
     has_followed = serializers.SerializerMethodField()
     """
-    Friendship 表: {字段 from_user, to_user, created_at}
-    Newsfeed   表: {字段 user, tweet, created_at}
-    结构简单 写多读少[例如: fanout(给用户的所有 followers 推送数据)], 适合使用 HBase 进行存储
+    ⚠️ 为什么 Friendship / Newsfeed 适合使用 HBase 存储：
+    1. 数据量大 (Newsfeed: 系统中数据量最大的表)
+       - 传统关系型数据库在超大表下: 索引维护成本高, 扩展性受限
+       - HBase 天然适合存储海量行数据
+
+    2. 写多读少，且写入模式友好
+       - 典型场景 Newsfeed
+            一次读操作通常只对应一次数据读取
+            一次写操作可能会触发多次 fanout 写入 (Push 模型的 fanout)
+       - 该过程涉及大量顺序写入
+       - HBase 对高吞吐写入（batch / 顺序写）非常友好
+
+    3. 表结构简单(字段少、结构稳定), 查询需求有限
+        Friendship 表: {字段 from_user, to_user, created_at}
+        Newsfeed   表: {字段 user, tweet, created_at}
+    
+    ================================================================
     
     一 数据库迁移：MySQL -> HBase
        - 在不中断线上服务的前提下完成数据库迁移

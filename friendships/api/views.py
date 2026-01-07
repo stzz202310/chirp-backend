@@ -11,8 +11,7 @@ from friendships.api.serializers import (
     FollowerSerializer,
     FriendShipSerializerForCreate,
 )
-from friendships.hbase_models import HBaseFollowing, HBaseFollower
-from friendships.models import Friendship
+from friendships.models import Friendship, HBaseFollowing, HBaseFollower
 from friendships.services import FriendshipService
 from gatekeeper.models import Gatekeeper
 from utils.paginations import EndlessPagination
