@@ -19,7 +19,10 @@ class NewsFeed(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     tweet = models.ForeignKey(Tweet, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    # [冗余]等于tweet.created_at; 原因 必须是字段，才能 index_together
+    # [冗余]等于 tweet.created_at; 原因 必须是字段，才能 index_together
+    # TODO [Myself] created_at 应该等于 tweet.created_at, 而不是 auto_now_add=True; 并增加相应的 unit test
+    # iso格式: 2026-01-01 10:10:10.000000     NewsFeed.created_at      = tweet.created_at
+    # int格式: 1767934515324687               HBaseNewsFeed.created_at = Tweet.timestamp
 
     class Meta:
         index_together = (('user', 'created_at'),)

@@ -2,7 +2,6 @@ from django.conf import settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from newsfeeds.models import NewsFeed
 from newsfeeds.services import NewsFeedService
 from testing.testcases import TestCase
 from utils.paginations import EndlessPagination
@@ -65,13 +64,11 @@ class NewsFeedApiTests(TestCase):
         response = self.taotao_client.get(NEWSFEEDS_URL)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['has_next_page'], True)
-        self.assertEqual(len(response.data['results']), page_size)
-        self.assertEqual(response.data['results'][0]['id'], newsfeeds[0].id)
-        self.assertEqual(response.data['results'][1]['id'], newsfeeds[1].id)
-        self.assertEqual(
-            response.data['results'][page_size - 1]['id'],
-            newsfeeds[page_size - 1].id,
-        )
+        results = response.data['results']
+        self.assertEqual(len(results), page_size)
+        self.assertEqual(results[0]['id'], newsfeeds[0].id)
+        self.assertEqual(results[1]['id'], newsfeeds[1].id)
+        self.assertEqual(results[page_size - 1]['id'], newsfeeds[page_size - 1].id)
 
         # 2. pull the 2nd page
         response = self.taotao_client.get(
@@ -185,8 +182,8 @@ class NewsFeedApiTests(TestCase):
         # 1. only cached list_limit objects
         cached_newsfeeds = NewsFeedService.get_cached_newsfeeds(user_id=self.taotao.id)
         self.assertEqual(len(cached_newsfeeds), list_limit)
-        queryset = NewsFeed.objects.filter(user=self.taotao)
-        self.assertEqual(len(queryset), list_limit + page_size)
+        count = NewsFeedService.count(user_id=self.taotao.id)
+        self.assertEqual(count, list_limit + page_size)
 
         results = self._paginate_to_get_newsfeeds(client=self.taotao_client)
         self.assertEqual(len(results), list_limit + page_size)

@@ -162,6 +162,10 @@ class HBaseModel:
     def row_key(self):
         return self.serialize_row_key(data=self.__dict__)
 
+    @property
+    def id(self):
+        return self.row_key
+
     def save(self, batch=None):
         row_data = self.serialize_row_data(data=self.__dict__)
         # 如果 row_data={column key:value} 为空, hbase 会直接不存储这个 row_key

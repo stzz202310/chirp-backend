@@ -3,8 +3,9 @@ from ratelimit.decorators import ratelimit
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
+from gatekeeper.models import GateKeeper
 from newsfeeds.api.serializers import NewsFeedSerializer
-from newsfeeds.models import NewsFeed
+from newsfeeds.models import NewsFeed, HBaseNewsFeed
 from newsfeeds.services import NewsFeedService
 from utils.paginations import EndlessPagination
 
@@ -25,15 +26,27 @@ class NewsFeedViewSet(viewsets.GenericViewSet):
 
     @method_decorator(ratelimit(key='user', rate='5/s', method='GET', block=True))
     def list(self, request):
+        paginator = self.paginator
         cached_newsfeeds = NewsFeedService.get_cached_newsfeeds(user_id=request.user.id)
         # 自定义方法，需要通过 self.paginator 调用
-        page = self.paginator.paginate_cached_list(
+        page = paginator.paginate_cached_list(
             cached_list=cached_newsfeeds,
             request=request,
         )
-        if page is None: # 可能存在[数据库里没有 load 在 cache 里的数据], 需要直接去数据库查询
-            queryset = self.get_queryset()
-            page = self.paginate_queryset(queryset=queryset)
+
+        if page is None:    # 说明可能存在未加载到 cache 的数据，需要直接查询数据库
+            if GateKeeper.is_switch_on(gk_name='switch_newsfeed_to_hbase'):
+                page = paginator.paginate_hbase(
+                    hb_model=HBaseNewsFeed,
+                    row_key_prefix=(request.user.id,),
+                    request=request
+                )
+            else:
+                # queryset = NewsFeed.objects.filter(user=request.user)
+                queryset = self.get_queryset()
+                # self.paginate_queryset(): 会自动传入 request=self.request
+                # self.paginator.paginate_queryset(): 需要手动传入 request
+                page = paginator.paginate_queryset(queryset=queryset, request=request)
 
         serializer = NewsFeedSerializer(
             instance=page,
@@ -43,4 +56,4 @@ class NewsFeedViewSet(viewsets.GenericViewSet):
             # class NewsFeedSerializer(...):
             #   tweet = TweetSerializer()
         )
-        return self.get_paginated_response(data=serializer.data)
+        return paginator.get_paginated_response(data=serializer.data)

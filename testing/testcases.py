@@ -7,9 +7,9 @@ from rest_framework.test import APIClient
 from comments.models import Comment
 from django_hbase.models import HBaseModel
 from friendships.services import FriendshipService
-from gatekeeper.models import Gatekeeper
+from gatekeeper.models import GateKeeper
 from likes.models import Like
-from newsfeeds.models import NewsFeed
+from newsfeeds.services import NewsFeedService
 from tweets.models import Tweet
 from utils.redis_client import RedisClient
 
@@ -128,7 +128,8 @@ class TestCase(DjangoTestCase):
     def clear_cache(self):
         caches['testing'].clear()
         RedisClient.clear()
-        # Gatekeeper.set_kv(gk_name='switch_friendship_to_hbase', key='percent', value=100)
+        GateKeeper.turn_on(gk_name='switch_newsfeed_to_hbase')
+        GateKeeper.turn_on(gk_name='switch_friendship_to_hbase')
 
     @property
     def anonymous_client(self):
@@ -180,6 +181,10 @@ class TestCase(DjangoTestCase):
     def create_friendship(self, from_user, to_user):
         return FriendshipService.follow(from_user_id=from_user.id, to_user_id=to_user.id)
 
+    def create_newsfeed(self, user, tweet):
+        created_at = NewsFeedService.created_at(tweet=tweet)
+        return NewsFeedService.create(user_id=user.id, tweet_id=tweet.id, created_at=created_at)
+
     def create_tweet(self, user, content=None):
         if content is None:
             content = 'default tweet content'
@@ -205,6 +210,3 @@ class TestCase(DjangoTestCase):
         # print(c.app_label)        'tweets'
         # print(c.model_class())    <class 'tweets.models.Tweet'>   if c.model_class() == Tweet:
         return instance
-
-    def create_newsfeed(self, user, tweet):
-        return NewsFeed.objects.create(user=user, tweet=tweet)
