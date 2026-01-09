@@ -13,7 +13,7 @@ from friendships.api.serializers import (
 )
 from friendships.models import Friendship, HBaseFollowing, HBaseFollower
 from friendships.services import FriendshipService
-from gatekeeper.models import Gatekeeper
+from gatekeeper.models import GateKeeper
 from utils.paginations import EndlessPagination
 
 
@@ -39,7 +39,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         pk = int(pk)
         user = self.get_object()
         paginator = self.paginator
-        if Gatekeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
+        if GateKeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
             page = paginator.paginate_hbase(hb_model=HBaseFollower, row_key_prefix=(pk,), request=request)
         else:
             friendships = Friendship.objects.filter(to_user_id=pk).order_by('-created_at')
@@ -55,7 +55,7 @@ class FriendshipViewSet(viewsets.GenericViewSet):
         pk = int(pk)
         user = self.get_object()
         paginator = self.paginator
-        if Gatekeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
+        if GateKeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
             page = paginator.paginate_hbase(hb_model=HBaseFollowing, row_key_prefix=(pk,), request=request)
         else:
             friendships = Friendship.objects.filter(from_user_id=pk).order_by('-created_at')

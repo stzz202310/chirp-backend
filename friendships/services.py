@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.cache import caches
 
 from friendships.models import Friendship, HBaseFollowing, HBaseFollower
-from gatekeeper.models import Gatekeeper
+from gatekeeper.models import GateKeeper
 from twitter.cache import FOLLOWINGS_PATTERN
 
 cache = caches['testing'] if settings.TESTING else caches['default']
@@ -67,7 +67,7 @@ class FriendshipService(object):
         # Friendship.objects.values_list('from_user_id', flat=True) [1, 5, 9]
         # flat=True: 只能在“只选一个字段”时使用, 把 (value,) 压扁成 value
         # from_user_ids = Friendship.objects.filter(to_user_id=to_user_id).values_list('from_user_id', flat=True)
-        if not Gatekeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
+        if not GateKeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
             friendships = Friendship.objects.filter(to_user_id=to_user_id)
         else:
            friendships = HBaseFollower.filter(prefix=(to_user_id, None))
@@ -81,7 +81,7 @@ class FriendshipService(object):
         if user_id_set is not None: # key 如果不存在, 也不会报错 return None
             return user_id_set
 
-        if not Gatekeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
+        if not GateKeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
             friendships = Friendship.objects.filter(from_user_id=from_user_id)
         else:
             friendships = HBaseFollowing.filter(prefix=(from_user_id,))
@@ -109,7 +109,7 @@ class FriendshipService(object):
             return False
         return to_user_id in cls.get_following_user_id_set(from_user_id=from_user_id)
         # ⚠️ legacy code
-        # if not Gatekeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
+        # if not GateKeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
         #     return Friendship.objects.filter(
         #         from_user_id=from_user_id,
         #         to_user_id=to_user_id,
@@ -123,7 +123,7 @@ class FriendshipService(object):
         if from_user_id == to_user_id:
             return None
 
-        if not Gatekeeper.is_switch_on('switch_friendship_to_hbase'):
+        if not GateKeeper.is_switch_on('switch_friendship_to_hbase'):
             # 1. create data in MySQL
             friendship = Friendship.objects.create(
                 # Friendship.objects.create(from_user=user_obj)
@@ -153,7 +153,7 @@ class FriendshipService(object):
         if from_user_id == to_user_id:
             return 0
 
-        if not Gatekeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
+        if not GateKeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
             # https://docs.djangoproject.com/en/3.1/ref/models/querysets/#delete
             # Queryset 的 delete 操作返回两个值，一个是删了多少数据，一个是具体每种类型删了多少
             # 为什么会出现多种类型数据的删除？因为可能因为 foreign key 设置了 cascade 出现级联
@@ -181,7 +181,7 @@ class FriendshipService(object):
         return len(user_id_set)
 
         # ⚠️ legacy code
-        # if not Gatekeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
+        # if not GateKeeper.is_switch_on(gk_name='switch_friendship_to_hbase'):
         #     return Friendship.objects.filter(from_user_id=from_user_id).count()
         #
         # followings = HBaseFollowing.filter(prefix=(from_user_id, None))

@@ -72,8 +72,7 @@ class TweetServiceTests(TestCase):
         tweet_ids = tweet_ids[::-1]
 
         # 1. cache miss
-        RedisClient.clear()
-        conn = RedisClient.get_connection()
+        self.clear_cache()
         tweets = TweetService.get_cached_tweets(user_id=self.taotao.id)
         self.assertEqual([tweet.id for tweet in tweets], tweet_ids)
 
@@ -91,7 +90,7 @@ class TweetServiceTests(TestCase):
         tweet1 = self.create_tweet(user=self.taotao, content='tweet1')
 
         # 1. cache miss
-        RedisClient.clear()
+        self.clear_cache()
         conn = RedisClient.get_connection()
         key = USER_TWEETS_PATTERN.format(user_id=self.taotao.id)
         self.assertEqual(conn.exists(key), False)

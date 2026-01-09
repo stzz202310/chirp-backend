@@ -1,7 +1,7 @@
 from utils.redis_client import RedisClient
 
 
-class Gatekeeper(object):
+class GateKeeper(object):
 
     @classmethod
     def get(cls, gk_name):
@@ -29,6 +29,10 @@ class Gatekeeper(object):
         # percent == 100: switch on [switch_friendship_to_hbase]
         # percent <  100: switch off[switch_friendship_to_hbase]
         return percent == 100
+
+    @classmethod
+    def turn_on(cls, gk_name):
+        cls.set_kv(gk_name=gk_name, key='percent', value=100)
 
     @classmethod
     def in_gk(cls, gk_name, user_id):

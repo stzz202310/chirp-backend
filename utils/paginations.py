@@ -92,14 +92,14 @@ class EndlessPagination(PageNumberPagination):
             
             3. HBase scan 范围查询 [start, stop)
                示例 RowKey(user_id, created_at) 顺序：
-                  (1, ts1)
-                  (2, None) -> stop 必须在这里停止，否则会扫描到用户1的数据
-                  (2, ts1)  
-                  (2, ts2)  -> start
-                  (2, Max)
+                  (1000, ts1)
+                  (2000, None) -> stop 必须在这里停止，否则会扫描到用户1的数据
+                  (2000, ts1)  
+                  (2000, ts2)  -> start
+                  (2000, Max)
                 
                 - 正确设置 stop 可以避免越界读取其他用户的数据
-                - 可灵活使用 (1, None) 或 (1, 999999) 作为界限
+                - 可灵活使用 (1000, None) 或 (1000, 999999) 作为界限
             """
             objects = hb_model.filter(start=start, stop=stop, limit=self.page_size + 2, reverse=True)
             if len(objects) and objects[0].created_at == int(created_at__lt):
@@ -143,14 +143,21 @@ class EndlessPagination(PageNumberPagination):
         # 如果 cached_list 的长度不足最大限制，说明 cached_list 里已经是所有数据了
         if len(cached_list) < settings.REDIS_LIST_LENGTH_LIMIT:
             return paginated_list
-        # 如果进入这里，说明可能存在[数据库里没有 load 在 cache 里的数据], 需要直接去数据库查询
+        # 如果进入这里，说明可能存在未加载到 cache 的数据，需要直接查询数据库
         return None
 
     def paginate_ordered_list(self, reverse_ordered_list, request):
         # reverse_ordered_list: 保存在 cache 中，一般不会太大，可以 for 循环
         # reverse_ordered_list: created_at 倒序排列 [.order_by('-created_at')]
         if 'created_at__gt' in request.query_params:
-            created_at__gt = parser.isoparse(request.query_params['created_at__gt'])
+            # 兼容 iso格式[MySQL] 和 int格式[HBase] 的时间戳
+            # iso格式: 2026-01-01 10:10:10.000000     NewsFeed.created_at      = tweet.created_at
+            # int格式: 1767934515324687               HBaseNewsFeed.created_at = Tweet.timestamp
+            try:
+                created_at__gt = parser.isoparse(request.query_params['created_at__gt'])
+            except ValueError:
+                created_at__gt = int(request.query_params['created_at__gt'])
+
             objects = []
             for obj in reverse_ordered_list:
                 if obj.created_at > created_at__gt:
@@ -162,7 +169,11 @@ class EndlessPagination(PageNumberPagination):
 
         index = 0
         if 'created_at__lt' in request.query_params:
-            created_at__lt = parser.isoparse(request.query_params['created_at__lt'])
+            try:
+                created_at__lt = parser.isoparse(request.query_params['created_at__lt'])
+            except ValueError:
+                created_at__lt = int(request.query_params['created_at__lt'])
+
             for index, obj in enumerate(reverse_ordered_list):
                 if obj.created_at < created_at__lt:
                     break
