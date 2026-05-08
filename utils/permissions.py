@@ -2,17 +2,15 @@ from rest_framework.permissions import BasePermission
 
 
 class IsObjectOwner(BasePermission):
-    """""""""
-    这个 Permission 负责检查 obj.user == request.user
-    这个类是比较通用的，今后如果有其他用到这个类的地方，可以将文件放到一个共享的位置
-
-    Permission 会一个个被执行
-    - 如果是 detail=False 的 action，只检查 has_permission
-    - 如果是 detail=True 的 action，同时检查 has_permission 和 has_object_permission
-
-    如果没有权限，默认的错误信息会显示 IsObjectOwner.message 中的内容
-    """
     message = "You do not have permission to access this object."
+
+    """
+    DRF 会按顺序执行权限类:
+    - 对于 detail=False 的 action，只调用 has_permission()
+    - 对于 detail=True 的 action，会先调用 has_permission()，再调用 has_object_permission()
+    
+    如果权限检查未通过，默认返回的错误信息为 IsObjectOwner.message 中的内容
+    """
 
     def has_permission(self, request, view):
         return True
@@ -27,6 +25,6 @@ class IsCommentOwnerOrTweetOwner(BasePermission):
     def has_permission(self, request, view):
         return True
 
-    def has_object_permission(self, request, view, obj): # obj = self.get_object()
+    def has_object_permission(self, request, view, obj):
         # request.user == obj.tweet.user: 多一次query
         return request.user == obj.user or request.user.id == obj.tweet.user_id

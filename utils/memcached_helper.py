@@ -8,21 +8,20 @@ class MemcachedHelper:
 
     @classmethod
     def get_key(cls, model_class, object_id):
-        return '{}:{}'.format(model_class.__name__, object_id)
+        return f'{model_class.__name__.lower()}:{object_id}'
 
     @classmethod
     def get_object_through_cache(cls, model_class, object_id):
-        # cache: 优化读多写少的情况
-        # hit rate 缓存命中率 = hit/(hit + miss); user表单的命中率 98%
         key = cls.get_key(model_class=model_class, object_id=object_id)
         # 1. read from cache first
+        #    key 如果不存在, return None 不会报错
         obj = cache.get(key)
-        if obj: # cache hit return
+        if obj: # cache hit
             return obj
 
         # 2. cache miss, read from database
         obj = model_class.objects.get(pk=object_id)
-        cache.set(key, obj) # using default 'TIMEOUT'
+        cache.set(key, obj)
         return obj
 
     @classmethod

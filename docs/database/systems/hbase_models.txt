@@ -1,0 +1,268 @@
+
+==================================================
+HBaseModel 设计与使用说明
+==================================================
+HBaseModel 是一个轻量级 ORM 封装, 用于简化对 HBase 的读写操作, 提供类似 Django ORM 的使用体验
+
+核心能力:
+1. 数据建模 (Field 定义)
+2. 自动序列化 / 反序列化
+3. 基础 CRUD 操作
+4. 批量写入 (batch)
+5. RowKey 设计与解析
+
+
+==================================================
+一. 基本使用方式
+==================================================
+
+1. 创建并保存
+   instance = HBaseModel(from_user_id=1, to_user_id=2, created_at=ts)
+   instance.save()
+
+2. 使用 create
+   HBaseModel.create(from_user_id=1, to_user_id=2, created_at=ts)
+
+3. 更新
+   instance.from_user_id = 2
+   instance.save()
+
+4. 查询
+   instance = HBaseFollowing.get(from_user_id=123, created_at=timestamp)
+   instances = HBaseFollowing.filter(prefix=(1,), limit=2, reverse=True)
+   instances = HBaseFollowing.filter(start=(1, results[1].created_at), limit=2, reverse=True)
+
+5. 删除
+   HBaseFollowing.delete(from_user_id=123, created_at=ts)
+
+
+==================================================
+二. HBase 底层操作
+==================================================
+
+table.put(row=self.row_key, data=row_data)
+table.row(row=row_key)
+table.delete(row=row_key)
+table.scan(row_start, row_stop, row_prefix)
+
+- put / row / delete 支持 str 或 bytes
+- ⚠️ scan 必须使用 bytes
+
+
+Connection 相关:
+conn.tables()                           # 获取所有表
+conn.table(name)                        # 获取表对象
+conn.delete_table(name, disable=True)   # 仅在 settings.TESTING = True 时允许
+conn.create_table(name, families)       # 仅在 settings.TESTING = True 时允许
+
+
+==================================================
+三. 模型内部结构
+==================================================
+
+key:   'from_user_id'
+value: 1
+field: HBaseField 的实例 <django_hbase.models.fields.IntegerField object at 0xffffb2bc47c0>
+
+
+1. 类结构 (cls.__dict__)
+
+   HBaseFollowing.__dict__
+   {'__module__': 'friendships.models.hbase_friendship',
+    'from_user_id': <django_hbase.models.fields.IntegerField object at 0xffff9c0562f0>,
+    'created_at': <django_hbase.models.fields.TimestampField object at 0xffff9c056350>,
+    'to_user_id': <django_hbase.models.fields.IntegerField object at 0xffff9c0563b0>,
+    'Meta': <class 'friendships.models.hbase_friendship.HBaseFollowing.Meta'>,
+    'save': <function HBaseFollowing.save at 0xffff9c051000>,
+    'delete': <classmethod(<function HBaseFollowing.delete at 0xffff9c051630>)>,
+    '__doc__': None}
+
+   HBaseFollower.__dict__
+   {'__module__': 'friendships.models.hbase_friendship',
+    'to_user_id': <django_hbase.models.fields.IntegerField object at 0xffff9c056440>,
+    'created_at': <django_hbase.models.fields.TimestampField object at 0xffff9c0564a0>,
+    'from_user_id': <django_hbase.models.fields.IntegerField object at 0xffff9c056500>,
+    'Meta': <class 'friendships.models.hbase_friendship.HBaseFollower.Meta'>,
+    '__doc__': None}
+
+
+2. 构造函数 def __init__(self, **kwargs), 初始化对象属性
+
+   调用方式: cls(**kwargs) | HBaseFollowing(**kwargs) | following = HBaseFollowing(from_user_id=123,...)
+   实例结构: self.__dict__ {'from_user_id': 123, 'created_at': 1766539154271597, 'to_user_id': 34}
+
+
+3. field_hash = {key:field}  只提取 HBaseField
+
+   HBaseFollowing.get_field_hash()
+   {'from_user_id': <django_hbase.models.fields.IntegerField object at 0xffff9c0562f0>,
+    'created_at': <django_hbase.models.fields.TimestampField object at 0xffff9c056350>,
+    'to_user_id': <django_hbase.models.fields.IntegerField object at 0xffff9c0563b0>}
+
+
+==================================================
+四. 序列化流程 (写入 HBase)
+==================================================
+
+序列化: Python 对象 → HBase 存储格式
+
+1. RowKey 序列化
+   1) 按 Meta.row_key 顺序取值 (⚠️ 根据"查询需求" 定义 row_key 的顺序)
+      row_key = ('key1',)           {key1: val1}             => b"val1"      => {'key1': val1, 'key2': None}
+      row_key = ('key1', 'key2')    {key1: val1, key2: val2} => b"val1:val2" => {'key1': val1, 'key2': val2}
+
+   2) 字段处理规则
+      - int → 转字符串 + 补齐 16 位
+      - reverse=True → 字符串反转
+      - 禁止包含 ":" (⚠️ 否则解析失败)
+
+   Meta.row_key = ('from_user_id', 'created_at')
+   from_user_id = 123 → "0000000000000123" → "3210000000000000"
+   created_at = 1766539154271597 → "1766539154271597"
+   拼接:      "3210000000000000:1766539154271597"
+   转 bytes: b'3210000000000000:1766539154271597'
+
+--------------------------------------------------
+
+2. Column 序列化 + 写入 HBase
+   流程: 遍历 field, 只处理有 column_family 的字段
+
+   column_key   = "cf:to_user_id"
+   column_value = "0000000000000034"
+   {'cf:to_user_id': '0000000000000034'}
+
+   {row_key:                              {column_key     :  column_value}}
+   {b'3210000000000000:1766539154271597': {'cf:to_user_id': '0000000000000034'}}
+
+--------------------------------------------------
+
+3. 序列化代码
+
+  def save(self):
+    self.__dict__: {'from_user_id': 123, 'created_at': 1766539154271597, 'to_user_id': 34}
+
+    row_data = self.serialize_row_data(data=self.__dict__)
+    row_data: {'cf:to_user_id': '0000000000000034'}
+
+    def row_key(self): return self.serialize_row_key(data=self.__dict__)
+    row_key: b'3210000000000000:1766539154271597'
+
+    table.put(row=self.row_key, data=row_data)
+    {row_key                              : {column_key     : value}}
+    {b'3210000000000000:1766539154271597' : {'cf:to_user_id': '0000000000000034'}}
+
+
+==================================================
+五. 反序列化流程 (读取 HBase)
+==================================================
+
+反序列化: HBase 数据 → Python 对象
+
+1. RowKey 反序列化
+   1) bytes → str
+   2) 按 ":" 分割
+   3) 按 Meta.row_key 顺序解析
+   4) 调用 deserialize_field
+
+   {'from_user_id': 123, 'created_at': 1766539154271597}
+
+--------------------------------------------------
+
+2. Column 反序列化
+   1) 去掉 column_family: "cf:to_user_id" → "to_user_id"
+   2) 类型转换:
+      - IntegerField   → int(value)
+      - TimestampField → int(value)
+      - reverse=True   → 再反转回来
+
+   {'to_user_id': 34}
+
+--------------------------------------------------
+
+3. 合并数据, 构造对象
+   {'from_user_id': 123, 'created_at': 1766539154271597, 'to_user_id': 34}
+   instance = HBaseFollowing(**data)
+
+--------------------------------------------------
+
+4. 反序列化代码
+
+   def get(cls, **kwargs):
+       # instance = HBaseFollowing.get(from_user_id=123, created_at=timestamp)
+       # kwargs: {'from_user_id': 123, 'created_at': 1714382400}
+       # **kwargs: from_user_id=123, created_at=timestamp
+
+       row_key = cls.serialize_row_key(data=kwargs)
+       row_key: b'3210000000000000:1766539154271597'
+
+       row_data = table.row(row=row_key)
+       row_data: {b'cf:to_user_id': b'0000000000000034'}
+
+       instance = cls.init_from_row(row_key=row_key, row_data=row_data)
+       def init_from_row(cls, row_key, row_data):
+           data = cls.deserialize_row_key(row_key=row_key)
+           data: {'from_user_id': 123, 'created_at': 1766539154271597}
+
+           for column_key, column_value in row_data.items():
+               column_key = column_key.decode('utf-8')
+               key = column_key[column_key.find(':') + 1:]
+               data[key] = cls.deserialize_field(key=key, value=column_value)
+
+           data: {'from_user_id': 123, 'created_at': 1766539154271597, 'to_user_id': 34}
+           instance = HBaseFollowing(**data)
+           instance = HBaseFollowing(from_user_id=123, to_user_id=34, created_at=ts)
+
+
+==================================================
+六. 异常说明
+==================================================
+
+- NotImplementedError → 未定义 table_name  <happybase.table.Table name=b'test_twitter_followings'>
+- BadRowKeyError      → RowKey 不合法
+- EmptyColumnError    → 没有可写入列 (如果 row_data 为空, hbase 会直接不存储这个 row_key)
+
+
+============================================================
+七. table.scan() 范围查询 [docs.scripts.hbase_scripts]
+============================================================
+
+1. row_start   row_stop       扫描范围
+   ✅           ✅           [row_start,   row_stop)
+   ✅           ❌           [row_start,   last row key]
+   ❌           ✅           [1st row key, row_stop)
+   ❌           ❌           [1st row key, last row key] ⚠️ 全表扫描 full table scan
+
+   row_start: 从 {row_start}  开始扫描
+   row_stop:  到 {row_stop-1} 结束扫描
+
+   reverse = True:  i-- 向前扫描 (start > stop);   for i in range(row_start, row_stop, -1)
+   reverse = False: i++ 向后扫描 (start < stop);   for i in range(row_start, row_stop)
+   reverse = False: 1) start > stop 不进入循环, return [];
+                    2) start = stop 返回单行,   return row[start|end];
+
+
+2. row_prefix: only rows with row keys matching the prefix will be returned.
+               ⚠️ If given, row_start and row_stop cannot be used.
+
+
+3. 范围查询的边界设计
+   RowKey = (user_id, created_at), 字典序排列:
+            (1000, ts1)
+            (2000, None)  ← stop 设在此处，防止越界读到 user=1 的数据
+            (2000, ts1)
+            (2000, ts2)   ← start
+            (2000, Max)     MAX_TIMESTAMP = 9999999999999999
+
+   - 用 (user_id, None)     作为下界 (最小值)   reverse=True
+   - 用 (user_id, 999...9)  作为上界 (最大值)
+   - 正确设置边界可避免跨用户数据污染
+
+
+4. EndlessPagination [utils.paginations]
+   1) HBase 仅支持 <= 的查询条件, ❌ 不支持严格的小于(<)
+       → (<= created_at__lt, limit=page_size+2) 等价于 (< created_at__lt, limit=page_size+1)
+
+   2) HBase RowKey 为字符串字典序 (timestamp 从小到大),
+      若需要按 created_at 倒序('-created_at'), 需手动设置
+      a. objects = hb_model.filter(reverse=True)
+      b. objects = hb_model.filter(), objects = objects[::-1]

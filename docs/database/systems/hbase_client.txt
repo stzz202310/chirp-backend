@@ -1,0 +1,86 @@
+
+============================================================
+1. Apache Thrift 核心特点
+============================================================
+
+1️⃣ Apache Thrift = RPC(Remote Procedure Call 远程函数调用) + 跨语言支持 + 高性能通信
+
+a. RPC: 跨机器调用函数，调用者像本地函数一样使用
+    机器 A: a_plus_b(1, 2)
+           (1, 2)     ↑
+             ↓      返回 3
+    机器 B: def a_plus_b(a, b): return a + b
+
+    HTTP: http://xxx/aplusb/?a=1&b=2
+
+b. 跨语言支持: 同一套接口定义(IDL), 自动生成多语言代码(Python/Java/Go/C++/…)
+    HBase：Java 编写
+    Django：Python 编写
+    Thrift 负责连接 HBase(Java) 和 Django(Python), 作为它们之间的跨语言通信桥梁
+
+c. 高性能通信: 建立在 TCP/IP 之上; 二进制协议; Header小, 数据紧凑 支持压缩
+
+d. HTTP: 为浏览器设计; Header 重, URL 参数多; 更适合 Server → Client ✅
+         不推荐用于服务间高频通信
+
+   Thrift: 二进制协议, 轻量高效; 适合 Server → Server / 微服务内部通信 ✅
+
+
+============================================================
+2. Python 访问 HBase 的真实链路
+============================================================
+HBase Shell: 仅供人工操作, 不适合程序调用
+HBase Thrift Server: 使用 Thrift 协议访问 HBase, 提供给 Python / Ruby / Go 等客户端
+
+    浏览器
+       ↓ HTTP
+    Django（业务逻辑）
+       ↓ Python 函数调用
+    HappyBase（Python HBase 客户端）
+       ↓ Thrift 客户端（封装在 HappyBase 内部）
+    Thrift 协议（TCP 二进制）
+       ↓
+    HBase Thrift Server（Java 进程, 127.0.0.1:9090）
+       ↓
+    Java HBase API
+       ↓
+    HBase RegionServer
+
+- Django 负责 Web 请求和业务逻辑，并不直接与 HBase 通信
+- Django 通过调用 HappyBase, 由 HappyBase 内部的 Thrift 客户端通过 Thrift 协议 与 HBase Thrift Server 通信,
+  最终访问 Java 实现的 HBase
+
+
+============================================================
+3. HBase Batch 写入机制笔记
+============================================================
+
+Batch 是 HBase 客户端提供的批量写入工具，用于提升写入性能。
+核心思想: 先在客户端内存中累积 put / delete 操作, 再一次性通过 RPC 发送给 HBase Server。
+
+1) RPC (Remote Procedure Call)
+   - 客户端与 HBase Server 之间的每一次真正写入，都是一次 RPC
+   - 单条 put = 1 次 RPC (性能较差)
+   - 使用 Batch 让多条 put|delete 共用更少的 RPC (类似于 bulk_create, 节省 round trip time)
+
+
+2) Batch 的工作流程
+   batch.put(...)      # 仅缓存在客户端内存中
+   batch.delete(...)
+   ...
+   batch.send()        # 手动触发 flush，将操作真正发送到 HBase
+   在调用 batch.send() 之前，数据并未写入 HBase。
+
+
+3) Batch 的触发方式（flush）
+   A. 手动触发: 显式调用 batch.send()
+      Batch = 客户端写入缓冲区
+      batch.send() = 手动 flush (真正发 RPC)
+
+   B. 自动触发: 当累计的 put|delete 数量达到 batch_size 时, 客户端会自动调用 batch.send()
+
+   C. 上下文管理器 (推荐)
+      with table.batch(...) as batch:
+          batch.put(...)
+          ...
+      # 离开 with 块时，自动调用 batch.send()

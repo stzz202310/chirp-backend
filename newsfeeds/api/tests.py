@@ -1,13 +1,14 @@
+from dateutil import parser
 from django.conf import settings
 from rest_framework import status
-from rest_framework.test import APIClient
 
+from gatekeeper.models import GateKeeper
 from newsfeeds.services import NewsFeedService
 from testing.testcases import TestCase
 from utils.paginations import EndlessPagination
 
 NEWSFEEDS_URL = '/api/newsfeeds/'
-POST_TWEETS_URL = '/api/tweets/'
+TWEETS_URL = '/api/tweets/'
 FOLLOW_URL = '/api/friendships/{}/follow/'
 
 
@@ -15,40 +16,50 @@ class NewsFeedApiTests(TestCase):
 
     def setUp(self):
         super(NewsFeedApiTests, self).setUp()
-        self.taotao = self.create_user('taotao')
-        self.taotao_client = APIClient()
-        self.taotao_client.force_authenticate(self.taotao)
-
-        self.zhuzhu = self.create_user('zhuzhu')
-        self.zhuzhu_client = APIClient()
-        self.zhuzhu_client.force_authenticate(self.zhuzhu)
+        self.taotao, self.taotao_client = self.create_user_and_client('taotao')
+        self.zhuzhu, self.zhuzhu_client = self.create_user_and_client('zhuzhu')
 
     def test_list(self):
         # 1. 需要登陆
         response = self.anonymous_client.get(NEWSFEEDS_URL)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
         # 2. 不能用 post
         response = self.taotao_client.post(NEWSFEEDS_URL)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
         # 3. 一开始啥都没有
         response = self.taotao_client.get(NEWSFEEDS_URL)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 0)
+
         # 4. 自己发的信息是可以看到的
-        self.taotao_client.post(POST_TWEETS_URL, data={'content': "Hello Zhuzhu!"})
+        self.taotao_client.post(TWEETS_URL, data={'content': "Hello Zhuzhu!"})
         response = self.taotao_client.get(NEWSFEEDS_URL)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 1)
+
         # 5. 关注之后可以看到别人发的
         self.taotao_client.post(FOLLOW_URL.format(self.zhuzhu.id))
-        response = self.zhuzhu_client.post(
-            path=POST_TWEETS_URL,
-            data={'content': "Hello Taotao",}
-        )
+        response = self.zhuzhu_client.post(TWEETS_URL, data={'content': "Hello Taotao!"})
         posted_tweet_id = response.data['id']
+        tweet_created_at = response.data['created_at']  # iso 格式字符串
+
         response = self.taotao_client.get(NEWSFEEDS_URL)
         self.assertEqual(len(response.data['results']), 2)
         self.assertEqual(response.data['results'][0]['tweet']['id'], posted_tweet_id)
+
+        # newsfeed_created_at = tweet_created_at
+        if GateKeeper.is_switch_on(gk_name='switch_newsfeed_to_hbase'):
+            tweet_created_at = parser.isoparse(tweet_created_at)
+            tweet_created_at = int(tweet_created_at.timestamp() * 1000000)
+            newsfeed_created_at = response.data['results'][0]['created_at']
+            self.assertEqual(newsfeed_created_at, tweet_created_at) # int格式[HBase]
+        else:
+            newsfeed_created_at = response.data['results'][0]['created_at'] # ⚠️ datetime 对象
+            newsfeed_created_at = newsfeed_created_at.isoformat()
+            newsfeed_created_at = newsfeed_created_at.replace('+00:00', 'Z')
+            self.assertEqual(newsfeed_created_at, tweet_created_at)  # iso格式[MySQL]
 
     def test_pagination(self):
         page_size = EndlessPagination.page_size
@@ -107,7 +118,6 @@ class NewsFeedApiTests(TestCase):
         self.assertEqual(response.data['results'][0]['id'], new_newsfeed.id)
 
     def test_user_cache(self):
-        # newsfeeds -> tweets -> users -> user profile
         profile = self.zhuzhu.profile
         profile.nickname = 'yaoyao'
         profile.save()
@@ -124,7 +134,7 @@ class NewsFeedApiTests(TestCase):
 
         self.taotao.username = 'pipi'
         self.taotao.save()
-        profile.nickname = 'miaomiaomiao'   # zhuzhu
+        profile.nickname = 'miaomiaomiao'   # self.zhuzhu.profile
         profile.save()
 
         response = self.zhuzhu_client.get(NEWSFEEDS_URL)
@@ -150,10 +160,14 @@ class NewsFeedApiTests(TestCase):
 
         # update content
         tweet.content = 'taotao tweet2'
-        tweet.save()
+        tweet.save()    # if not created: return
         response = self.zhuzhu_client.get(NEWSFEEDS_URL)
         results = response.data['results']
         self.assertEqual(results[0]['tweet']['content'], 'taotao tweet2')
+
+        response = self.zhuzhu_client.get(TWEETS_URL, data={'user_id': self.taotao.id})
+        results = response.data['results']
+        self.assertEqual(results[0]['content'], 'taotao tweet') # ⚠️ content 没有更新
 
     def _paginate_to_get_newsfeeds(self, client):
         # paginate until the end 模拟用户上拉加载更多

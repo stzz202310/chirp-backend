@@ -1,8 +1,3 @@
-"""
-Deprecated
-use newsfeeds.models.hbase_models.HBaseNewsFeed instead
-"""
-
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models.signals import post_save
@@ -13,16 +8,12 @@ from utils.memcached_helper import MemcachedHelper
 
 
 class NewsFeed(models.Model):
-    # user: 不是存储谁发了这条 tweet，而是谁可以看到这条 tweet
-    # user follow 了 tweet 的发帖人，所以 user 的新鲜事列表有这个帖子
-    # user 一般是 request.user, 不需要读取缓存
+    # user: 能看到这条 tweet 的用户 (关注了发帖人), 而非 tweet 作者
+    # user: 一般是 request.user, 不需要读取缓存
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     tweet = models.ForeignKey(Tweet, on_delete=models.SET_NULL, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    # [冗余]等于 tweet.created_at; 原因 必须是字段，才能 index_together
-    # TODO [Myself] created_at 应该等于 tweet.created_at, 而不是 auto_now_add=True; 并增加相应的 unit test
-    # iso格式: 2026-01-01 10:10:10.000000     NewsFeed.created_at      = tweet.created_at
-    # int格式: 1767934515324687               HBaseNewsFeed.created_at = Tweet.timestamp
+    # [冗余]created_at = tweet.created_at，作为独立字段是为了支持 index_together
+    created_at = models.DateTimeField()
 
     class Meta:
         index_together = (('user', 'created_at'),)

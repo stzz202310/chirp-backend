@@ -1,0 +1,153 @@
+
+
+============================================================
+1. Create 行为的本质
+============================================================
+1️⃣ create {user, comment, tweet, like, newsfeed}
+
+1. 前端场景：通过 API 创建（HTTP request → views → serializer → save）
+2. 测试场景：testcases.create_tweet(user=user)
+本质一致, 最终都会执行: Tweet.objects.create(user=user, content=content)
+
+
+2️⃣ 创建用户必须使用 User.objects.create_user()，不能使用 .create()
+1. User.objects.create(password="123456") 会明文保存密码
+   - 登录验证无法通过, Django 认证系统只识别加密后的密码
+   - 极大的安全问题 (数据泄漏 = 密码直接暴露)
+
+2. User.objects.create_user(password="123456")
+   - 内部会调用 user.set_password(password), 密码会以哈希形式存储
+     例如: password = "pbkdf2_sha256$390000$Uq4Wj7..."
+   - username / email 会进行规范化处理(normalize), 保证大小写, 邮件格式等行为一致
+   ⚠️ 不会自动创建关联的 UserProfile, 需显式访问 user.profile
+
+
+============================================================
+2. API 测试常见问题汇总
+============================================================
+1) 每个测试方法必须以 test_ 开头, 否则 Django TestRunner 不会自动执行
+
+2) 试 API 测试失败时的响应内容
+   4XX错误   报错时: print(response.data)    DRF解析前的响应数据, 原始响应内容 (bytes)
+   5XX错误   报错时: print(response.content) DRF解析后的响应数据, Python 对象 (dict)
+
+3) 常见 404 错误原因汇总
+   a. twitter.urls 中没有添加 router.register(...)
+   b. URL 路径拼写错误 (如 path='/api/profile/{}/' 单复数不一致)
+   c. @action(detail=True) 中 self.get_object() 查不到对象，自动返回 404
+
+4) 301 错误原因
+   Django / DRF 默认启用 APPEND_SLASH=True
+   如果 URL 没有末尾斜杠，会自动重定向到加斜杠的 URL, 返回状态码 301 (Moved Permanently)
+
+   GET /api/tweets/1   → 自动重定向到 /api/tweets/1/
+   GET /api/tweets/1/  → 正常访问
+
+
+============================================================
+3. 事务 (Transaction) 基础概念
+============================================================
+1️⃣ 事务是数据库层面的概念，遵循 ACID 特性:
+
+    | 特性         | 含义    |
+    | ----------- | ------- |
+    | Atomicity   | 原子性   | 要么全做，要么全不做
+    | Consistency | 一致性   |
+    | Isolation   | 隔离性   |
+    | Durability  | 持久性   |
+
+
+2️⃣ 事务的三种典型使用方式
+    1) 最原始的事务写法 (SQL)
+    BEGIN;
+    INSERT INTO tweet ...;
+    INSERT INTO timeline ...;
+    COMMIT;     如果没异常
+    ROLLBACK;   如果抛异常
+
+    2) Django 中的 transaction API
+    from django.db import transaction
+    with transaction.atomic():
+        # BEGIN
+        do_something()
+        # 无异常 → COMMIT
+        # 抛异常 → 自动 ROLLBACK
+
+    3) python manage.py test
+    │
+    ├─ CREATE DATABASE test_twitter;    创建 test_twitter 数据库
+    │
+    ├─ 运行 test case (TestCase)
+    │   ├─ BEGIN
+    │   ├─ test_xxx()
+    │   └─ ROLLBACK     不论测试正常结束，还是抛异常，最后都会执行 ROLLBACK
+    │
+    └─ DROP DATABASE test_twitter; ← 测试结束
+
+    TestCase: 在每个测试方法外面包了一层 transaction.atomic()
+    TestCase 的 atomic 行为是: ❌不允许 commit  ✅只用来隔离测试
+    测试正常通过                      测试失败|抛异常
+    BEGIN                           BEGIN
+        INSERT user                     INSERT user
+        ASSERT OK                       AssertionError
+    ROLLBACK    数据回滚             ROLLBACK      数据同样回滚
+
+
+============================================================
+4. 测试环境中的数据清理规则
+============================================================
+1️⃣ Django 测试环境中的数据清理规则
+    1) Django 会自动处理的部分: MySQL (仅限 DATABASES 中配置的数据库)
+    2) Django 不会自动处理的部分: Memcached, Redis, HBase, Celery broker|Message Queue
+       因为它们 不受 Django ORM / TestRunner 控制, ⚠️需要手动清理
+
+
+2️⃣ setUp / tearDown 的正确使用方式
+
+    class TestCase(DjangoTestCase):
+        def setUp(self):
+            # setUp 会在每个 test_xxx 运行前 被执行
+            self.clear_cache()
+            hbase_model_class.create_table()
+
+        def tearDown(self):
+            # tearDown 会在每个 test_xxx 运行后 被执行
+            hbase_model_class.drop_table()
+
+    执行流程(简化):
+    try:
+        self._pre_setup()     # Django 内部
+        self.setUp()          # 用户定义 setUp (TestCase.setUp)
+        self.test_xxx()
+    finally:
+        self.tearDown()       # TestCase.tearDown  ← 不论测试成功 或 失败, 一定执行
+        self._post_teardown() # Django 内部（rollback）
+
+    -------------------------------------------------------------------------
+
+    情况 1: 未重写 setUp
+        class TestAPI(TestCase):
+            pass
+
+        DjangoTestCase.setUp()
+        └─ TestCase.setUp()
+
+
+    情况 2: 重写 setUp，但未调用 super()
+    class TestAPI(TestCase):
+        def setUp(self):
+            do_something()
+
+        DjangoTestCase.setUp()
+        └─ TestAPI.setUp()
+
+
+    情况 3: 正确写法 (推荐)
+    class TestAPI(TestCase):
+        def setUp(self):
+            super().setUp() # 👈 关键
+            do_something_else()
+
+        DjangoTestCase.setUp()
+        └─ TestCase.setUp()
+           └─ TestAPI.setUp()

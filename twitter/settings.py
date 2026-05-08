@@ -29,33 +29,9 @@ DEBUG = False
 
 ALLOWED_HOSTS = ['127.0.0.1', '192.168.33.10', 'localhost',]
 INTERNAL_IPS = ['10.0.2.2',]
-"""
-在 Vagrant + VirtualBox NAT 网络模式中：
 
-- 虚拟机自己的 IP 通常为：10.0.2.15
-- 虚拟机看到的宿主机 IP 是：10.0.2.2
-- 端口映射把宿主机端口转发到虚拟机端口，例如：host:80 → guest:8000
-
-所以 request.META['REMOTE_ADDR'] 为 10.0.2.2 表示：请求来自“宿主机浏览器”。
-"""
 
 # Application definition
-"""
-A. 当前架构现状
-    1. 所有模块部署在同一台服务器
-    2. 使用同一个代码库(Git repo)，同一个 runtime
-    3. 模块间可以直接 from xxx import yyy
-    
-B. 拆分为微服务, 每个服务
-    1. 运行在不同 server/container (Docker/K8s), 
-    2. 独立 Git repo, 独立部署发布
-    3. 通过 API（HTTP/GRPC, protobuf/Thrift）互相调用, 代码量显著增加
-
-好处
-    解耦，每个模块独立演化: accounts 在 Twitter、直播、短视频等多个产品都能重用
-    可以独立扩容: tweets QPS 很高 → 单独扩容 tweets-service
-    技术栈可自由选择: accounts 使用 Django; tweets 使用 Go + Redis + Cassandra
-"""
 INSTALLED_APPS = [
     # django default
     'django.contrib.admin',
@@ -78,28 +54,17 @@ INSTALLED_APPS = [
     'friendships',
     'newsfeeds',
     'comments',
-    'likes',  # 完整的用户行为闭环[读:看到Tweet + 写:点赞]，企业用来做监控[如果点赞数量突然大幅下降，可能是系统链路出问题了]
-    'inbox',  # [不能叫 notifications，防止冲突] [单数: 每个用户只有一个inbox]
+    'likes',
+    'inbox',
 ]
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,    # Page: count, next, previous, results
-    # client 客户端传入这个参数
-    # web client        page_size = 20 to 50
-    # phone app client  page_seize = 10
-    # pad app client,
-    # 嵌入式 client ...
-
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
-    ],
+    'PAGE_SIZE': 10,    # PAGE_SIZE: 通常需要服务端做上限限制, 防止恶意请求拉取超大数据集
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend',],
     'EXCEPTION_HANDLER': 'utils.ratelimit.exception_handler',
 }
 
-# 所有的 HTTP 请求和响应都会按顺序依次经过这些 middleware
-# Client Request → [Middleware1] → [Middleware2] → ... → View
-# Client Response ← [Middleware1] ← [Middleware2] ← ...    ↓
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -168,8 +133,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# AUTH_USER_MODEL = 'django.contrib.auth.models.User'   django User 模型
-# AUTH_USER_MODEL = 'users.models.User'                 自定义  User 模型
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
@@ -191,68 +154,31 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
-"""
-MEDIA_URL = '/media/'
-❌ 会把 服务器 变成 stateful
-
-结构化数据 Structured Data
-文件型数据 File Based Data / Unstructured Data [图片 音频 文件]
-"""
-# 设置存储用户上传文件的 storage 用什么系统
+# 设置默认文件存储系统: Amazon S3
+# 单元测试时使用本地存储 (避免依赖 AWS)
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 TESTING = ((" ".join(sys.argv)).find('manage.py test') != -1)
-if TESTING: # 单元测试 在本地离线运行: 效率高 + 没有 web 依赖
+if TESTING:
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
-# 当用 s3boto3 作为用户上传文件存储时，需要按照你在 AWS 上创建的配置来设置你的 BUCKET_NAME
-# 和 REGION_NAME, 这个值你可以改成你自己创建的 bucket 的名字和所在的 region
 AWS_STORAGE_BUCKET_NAME = 'django-twitter-zhuzhu'
 AWS_S3_REGION_NAME = 'us-west-1'
+MEDIA_ROOT = 'media/'
 
-# 你还需要在 local_settings.py 中设置你的 AWS_ACCESS_KEY_ID 和 AWS_SECRET_ACCESS_KEY
-# 因为这是比较机密的信息，是不适合放在 settings.py 这种共享的配置文件中共享给所有开发者的
-# 真实的开发场景下，可以使用 local_settings.py 的方式，或者设置在环境变量里的方式
-# 这样这些机密信息就可以只被负责运维的核心开发人员掌控，而非所有开发者，降低泄露风险
-# AWS_ACCESS_KEY_ID = 'YOUR_ACCESS_KEY_ID'          类似 账户
-# AWS_SECRET_ACCESS_KEY = 'YOUR_SECRET_ACCESS_KEY'  类似 密码
 
-# media 的作用适用于存放被用户上传的文件信息
-# 当我们使用默认 FileSystemStorage 作为 DEFAULT_FILE_STORAGE 的时候
-# 文件会被默认上传到 MEDIA_ROOT 指定的目录下
-# media 和 static 的区别是：
-# - static 里通常是 css,js 文件之类的静态代码文件，是用户可以直接访问的代码文件
-# - media 里使用户上传的数据文件，而不是代码
-MEDIA_ROOT = 'media/'   # if TESTING: ... [.gitignore]
-
-# https://docs.djangoproject.com/en/3.1/topics/cache/
-# memcached 安装方法: apt-get install memcached
-# 然后安装 python 的 memcached 客户端：use `pip install python-memcached`
-# DO NOT `pip install memcache or django-memcached`
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
         'LOCATION': '127.0.0.1:11211',
-        'TIMEOUT': 86400,   # ttl: time to live 保证数据的一致性
-        # 1. 超时
-        # 2. 主动删除
-        # 3. 内存不够用，访问频率低的被删除 [LRU: 缓存100条]
-
-        # from django.core.cache import cache
-        # cache.get('key1')
-        # cache.set('key1', 'val1', timeout=100)
-        # cache.get('key1') -> return val1
-        # ... 100 seconds later
-        # cache.get('key1') -> 不存在，返回 None
-    },
-    'testing': {
-        'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
-        'LOCATION': '127.0.0.1:11211',  # 本机 | memcached服务器的ip地址 [AWS: XXX.XXX.com]
         'TIMEOUT': 86400,
-        'KEY_PREFIX': 'testing',
-        # 实际存储的 key: 'testing_followings:3'
     },
-    'ratelimit': {
+    'testing': {    # 测试环境缓存(避免 key 冲突)
+        'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
+        'LOCATION': '127.0.0.1:11211',
+        'TIMEOUT': 86400,
+        'KEY_PREFIX': 'testing', # 实际存储 key 示例: 'testing_followings:3'
+    },
+    'ratelimit': {  # 限流专用缓存
         'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
         'LOCATION': '127.0.0.1:11211',
         'TIMEOUT': 86400 * 7,
@@ -260,21 +186,21 @@ CACHES = {
     },
 }
 
-# Redis
-# 安装方法: sudo apt-get install redis
-# 然后安装 redis 的 python 客户端: pip install redis
+RATELIMIT_USE_CACHE = 'ratelimit'
+RATELIMIT_ENABLE = not TESTING  # 是否开启限流 (测试环境一般关闭)
+
+
 REDIS_HOST = '127.0.0.1'
 REDIS_PORT = 6379
-REDIS_DB = 0 if TESTING else 1      # Redis的DB(0,1,2 ...): 只是 key 的命名空间, 不是物理隔离
-REDIS_KEY_EXPIRE_TIME = 7 * 86400   # in seconds
-REDIS_LIST_LENGTH_LIMIT = 200 if not TESTING else 20    # 限制缓存长度，减少内存压力
+REDIS_DB = 0 if TESTING else 1
+REDIS_KEY_EXPIRE_TIME = 7 * 86400
+REDIS_LIST_LENGTH_LIMIT = 200 if not TESTING else 20
+# 控制列表最大长度 (例如 newsfeed 缓存), 防止无限增长导致内存压力
 
-# Celery Configuration Options
-# 使用如下命令把 worker 进程（只执行异步任务的进程，可以在不同的机器上）单独跑起来
-#   celery -A twitter worker -l INFO
 CELERY_BROKER_URL = 'redis://127.0.0.1:6379/2' if not TESTING else 'redis://127.0.0.1:6379/0'
+# 测试与生产使用不同 Redis DB, 不要让 cache DB 和 broker DB 混用！
 CELERY_TIMEZONE = 'UTC'
-CELERY_TASK_ALWAYS_EAGER = TESTING
+CELERY_TASK_ALWAYS_EAGER = TESTING      # 测试环境下任务同步执行
 CELERY_TASK_EAGER_PROPAGATES = TESTING
 CELERY_TASK_QUEUES = (
     Queue(name='default', routing_key='default'),
@@ -285,51 +211,6 @@ CELERY_TASK_ROUTES = {
     'newsfeeds.tasks.fanout_newsfeeds_batch_task': {'queue': 'newsfeeds'},
 }
 
-"""
-import os
-if os.environ.get('WORKER_TYPE') == 'newsfeeds':
-    CELERY_TASK_QUEUES = (Queue(name='newsfeeds', routing_key='newsfeeds'),)
-if os.environ.get('WORKER_TYPE') == 'default':
-    CELERY_TASK_QUEUES = (Queue(name='default', routing_key='default'),)
-...
-worker分组: 100台workers [90台订阅 'newsfeeds', 10台订阅 'default']
-
-
-name: 队列本身的名字
-celery -A twitter worker -Q default,newsfeeds -l info  [监听 default,newsfeeds 队列]
- 
-task  →  exchange  → (routing_key 匹配) →  queue
-包裹   →  分拣中心   → 包裹上的目的地标签   →  最终投递的仓库
-一个 exchange 可以连多个 queue, exchange 不会看 queue 名，只看 [routing_key]
-
-Queue(name='default', routing_key='default'),
-任何 routing_key = 'default' 的任务都进 'default' queue
-
-================================================================================
-
-测试环境
-REDIS_DB = 0
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
-1. key 前缀完全不同，不会冲突
-2. CELERY_TASK_ALWAYS_EAGER = True: task 同步执行, 不经过 Redis broker,
-   Redis 里的 Celery queue 几乎不会被用到
-
-生产环境
-REDIS_DB = 1
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/2'
-1. 避免 key 混乱: cache 短期|可丢, broker 强一致|顺序敏感
-2. 避免误删: .flushdb() 如果 cache + broker 共用 DB，Celery 直接炸
-
-
-CELERY_WORKER_CONCURRENCY = 4       concurrency ≈ CPU 核心数
-celery -A twitter worker -l info -c 4
-一个 Worker 内部 4 个子进程, 同时可以处理 最多 4 个任务
-"""
-
-# Rate Limiter
-RATELIMIT_USE_CACHE = 'ratelimit'
-# RATELIMIT_CACHE_PREFIX = 'rl:'  # 避免和其他的 key 冲突
-RATELIMIT_ENABLE = not TESTING # 在某些环境下，比如内部测试，一般会关掉
 
 try:
     from twitter.local_settings import *

@@ -1,0 +1,74 @@
+
+============================================================
+1. Denormalization (示例: Tweet.comments_count)
+============================================================
+
+场景: 新增一条 Comment
+    1. 在 Comment 表插入新记录
+    2. 同步更新 Tweet 表: tweet.comments_count (避免每次统计全表，提高查询性能)
+    3. 同步更新 Redis 缓存计数
+
+Redis 缓存策略:
+    - conn.expire(key, time): 设置缓存过期时间
+    - 过期后，下次访问会重新从数据库(tweet.comments_count) 读取最新数据
+    - 保证数据的一致性 (避免缓存长期与数据库不同步)
+
+Comment count 数据来源:
+    1. Comment 表    最最准确    tweet.comment_set.count()   实时准确, 但 N+1 查询
+    2. Tweet 表      冗余字段    tweet.comments_count        冗余字段, 存在 MSOT 数据不一致风险
+    3. Redis cache   缓存加速    RedisHelper.get_count(...)
+
+数据不一致处理策略:
+    1. ignore:  数据不敏感, 允许短暂不一致
+    2. Timeout: 定时从数据库回填纠正
+
+    def get_likes_count(self, obj):
+        if random.randint(0, 1000) == 0:  # [左闭右闭]
+            likes_count = obj.like_set.count()
+            if obj.likes_count != likes_count:
+                obj.likes_count = likes_count
+                obj.save()
+            return likes_count
+        return obj.likes_count
+
+============================================================
+2. 高并发缓存更新问题 (示例: Memcached 缓存 关注列表)
+============================================================
+用户 zhuzhu 已关注 {1,2,5}
+- 高并发下，zhuzhu 同时关注 6 和 7:
+    1. 关注 6: read {1,2,5} → {1,2,5,6} → write back
+    2. 关注 7: read {1,2,5} → {1,2,5,7} → write back
+- ❌ 直接更新缓存 → 数据丢失或覆盖(容易出错)
+- ✅ 让缓存失效  → 下一次访问从数据库读，回填 cache
+- ✅ 使用 Redis → 原子操作，避免高并发覆盖问题
+
+⚠️ 注意:
+- Web server 与 memcached 在不同机器上; 分布式锁可解决并发写问题，但效率低，破坏 cache 高速优势
+- 不加锁 → 数据不一致风险高
+
+
+============================================================
+3. 高并发计数器更新示例 (示例: Tweet.likes_count)
+============================================================
+likes.listeners
+
+方法 1
+tweet = instance.content_object
+tweet.likes_count += 1  # 在 save() 之前，如果又有人点赞，可能会导致计数错误
+tweet.save()            # save() 会触发 pre_save / post_save signal
+
+UPDATE tweets_tweet SET likes_count = 11 WHERE id=<instance.object_id>;   非原子操作
+
+方法 2
+Tweet.objects.filter(pk=tweet.id).update(likes_count=tweet.likes_count + 1)
+UPDATE tweets_tweet SET likes_count = 11 WHERE id=<instance.object_id>;   非原子操作
+
+方法 3
+Tweet.objects.filter(pk=instance.object_id).update(likes_count=F('likes_count') + 1)
+UPDATE tweets_tweet SET likes_count = likes_count + 1 WHERE id=<instance.object_id>;
+
+           并发安全     Signal
+ --------------------------------
+ 方法 1       ❌         ✅
+ 方法 2       ❌         ❌
+ 方法 3       ✅         ❌

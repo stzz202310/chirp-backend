@@ -22,7 +22,6 @@ class UserSerializerWithProfile(UserSerializer):
 
     def get_avatar_url(self, obj):
         # return obj.profile.avatar.url [如果 {obj.profile.avatar is None} 会报错]
-        # obj.profile: 已经通过 cache 优化
         if obj.profile.avatar:
             return obj.profile.avatar.url
         return None
@@ -52,7 +51,7 @@ class LoginSerializer(serializers.Serializer):
     # 但涉及到数据库查询 如 User.objects.filter(), 也可以放在 view 中处理
     def validate(self, data):
         data['username'] = data['username'].lower()
-        if not User.objects.filter(username=data.get('username')).exists():
+        if not User.objects.filter(username=data['username']).exists():
             raise exceptions.ValidationError({
                 "username": "User does not exist.",
             })
@@ -69,41 +68,33 @@ class SignupSerializer(serializers.ModelSerializer):
         fields = ('username', 'password', 'email',)
 
     def validate(self, data):
-        # TODO [EASY] 增加验证 username 是不是只由给定的字符集合构成
-        if User.objects.filter(username=data.get('username').lower()).exists():
+        # TODO [Homework] 增加验证 username 是不是只由给定的字符集合构成
+        if User.objects.filter(username=data['username'].lower()).exists():
             raise exceptions.ValidationError({
                 'username': 'This username has been occupied.',
             })
 
-        if User.objects.filter(email=data.get('email').lower()).exists():
+        if User.objects.filter(email=data['email'].lower()).exists():
             raise exceptions.ValidationError({
                 'email': 'This email has been occupied.',
             })
         return data
 
     def create(self, validated_data):
-        username = validated_data.get('username').lower()
-        email = validated_data.get('email').lower()
-        password = validated_data.get('password')
+        username = validated_data['username'].lower()
+        email = validated_data['email'].lower()
+        password = validated_data['password']
 
-        # .create() 明文保存密码 password = "123456"
-        # - 登录验证无法通过（Django 认证系统只认加密密码）
-        # - 极大的安全问题（数据泄漏 = 密码直接暴露）
-
-        # .create_user() 密码存入数据库时是哈希加密的 user.set_password(password)
-        # password = "pbkdf2_sha256$390000$Uq4Wj7..."
-        # username 和 email 需要进行一些 normalize 规范化处理
-        # 创建用户时必须使用 create_user() {user.set_password()}
         user = User.objects.create_user(
             username=username,
             email=email,
             password=password,
         )
-        user.profile    # Create UserProfile object
+        user.profile    # ⚠️ Create UserProfile object
         return user
 
 
 class UserProfileSerializerForUpdate(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
-        fields = ('nickname', 'avatar',)
+        fields = ('nickname', 'avatar',)    # 明确可更新字段白名单

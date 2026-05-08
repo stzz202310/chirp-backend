@@ -11,6 +11,5 @@ class UserProfileTests(TestCase):
         taotao = self.create_user(username='taotao')
         self.assertEqual(UserProfile.objects.count(), 0)
         profile = taotao.profile
-        # isinstance(obj, Class): obj 是不是 Class 的实例
         self.assertEqual(isinstance(profile, UserProfile), True)
         self.assertEqual(UserProfile.objects.count(), 1)

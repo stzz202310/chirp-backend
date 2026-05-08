@@ -1,5 +1,4 @@
 from rest_framework import status
-from rest_framework.test import APIClient
 
 from friendships.services import FriendshipService
 from testing.testcases import TestCase
@@ -15,13 +14,8 @@ class FriendshipApiTests(TestCase):
 
     def setUp(self):
         super(FriendshipApiTests, self).setUp()
-        self.taotao = self.create_user('taotao')
-        self.taotao_client = APIClient()
-        self.taotao_client.force_authenticate(self.taotao)
-
-        self.zhuzhu=self.create_user('zhuzhu')
-        self.zhuzhu_client = APIClient()
-        self.zhuzhu_client.force_authenticate(self.zhuzhu)
+        self.taotao, self.taotao_client = self.create_user_and_client(username='taotao')
+        self.zhuzhu, self.zhuzhu_client = self.create_user_and_client(username='zhuzhu')
 
         # create followings and followers for zhuzhu
         for i in range(2):
@@ -53,6 +47,8 @@ class FriendshipApiTests(TestCase):
         self.assertEqual('user' in response.data, True)
         self.assertEqual(response.data['user']['id'], self.taotao.id)
         self.assertEqual(response.data['user']['username'], self.taotao.username)
+        # FollowingSerializer: {当前用户 zhuzhu} 是否 has_followed {user=to_user=taotao}
+        self.assertEqual(response.data['has_followed'], True)
 
         # 5. 重复 follow 静默处理
         response = self.zhuzhu_client.post(url)
@@ -175,6 +171,7 @@ class FriendshipApiTests(TestCase):
 
         url = FOLLOWERS_URL.format(self.taotao.id)
         self._paginate_until_the_end(url=url, expect_pages=2, friendships=friendships)
+        # self._test_friendship_pagination(url=url, page_size=page_size, max_page_size=max_page_size)
 
         # anonymous hasn't followed any users
         response = self.anonymous_client.get(path=url)
@@ -199,6 +196,7 @@ class FriendshipApiTests(TestCase):
 
         url = FOLLOWINGS_URL.format(self.taotao.id)
         self._paginate_until_the_end(url=url, expect_pages=2, friendships=friendships)
+        # self._test_friendship_pagination(url=url, page_size=page_size, max_page_size=max_page_size)
 
         # anonymous hasn't followed any users
         response = self.anonymous_client.get(path=url)
@@ -216,7 +214,7 @@ class FriendshipApiTests(TestCase):
         for result in response.data['results']:
             self.assertEqual(result['has_followed'], True)
 
-        # test pull new friendships
+        # 下拉刷新
         last_created_at = friendships[-1].created_at
         response = self.taotao_client.get(path=url, data={'created_at__gt': last_created_at})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -233,7 +231,7 @@ class FriendshipApiTests(TestCase):
             self.assertEqual(result['created_at'], friendship.created_at)
             self.assertEqual(result['user']['id'], friendship.to_user_id)
 
-    def _paginate_until_the_end(self, url, expect_pages, friendships):
+    def _paginate_until_the_end(self, url, expect_pages, friendships): # 上拉加载
         results, pages = [], 0
         response = self.anonymous_client.get(path=url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)

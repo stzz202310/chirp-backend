@@ -1,0 +1,43 @@
+
+  | 数据结构| 命令示例                | 逻辑结构               |
+  | ------ | --------------------- | --------------------  |
+1 | String | SET key value         | key → value           |
+2 | Hash   | HSET key field value  | key → (field → value) |
+3 | List   | LPUSH key value       | key → [v1, v2, ...]   |
+4 | Set    | SADD key value        | key → {v1, v2}        |
+5 | ZSet   | ZADD key score member | key → {member: score} |
+
+1. String
+conn.set(name=key, value=value)
+conn.get(name=key)
+conn.exists(name=key)
+conn.delete(name=key)
+conn.expire(name=key, time=秒)
+conn.incr(name=key, amount=1)   # 只适用于整数值
+conn.decr(name=key, amount=1)
+
+2. Hash
+conn.hset(name=key, key=field, value=value)
+conn.hset(name=key, mapping={'field1': 'v1', 'field2': 'v2'})
+conn.hgetall(name=key)
+conn.hget(name=key, key=field)
+conn.exists(name=key)
+conn.hexists(name=key, key=field)
+conn.hdel(name=key, key=field)
+
+3. List
+conn.lpush(name=key, value=value)   | conn.rpush
+conn.lpop(name=key)                 | conn.rpop
+conn.lrange(name=key, start=0, stop=-1) # 获取列表切片, stop=-1 表示取到最后一个元素 [左闭右闭，从左向右全部取出来]
+conn.ltrim(name=key, start=0, stop=-1)  # 保留指定区间元素，其他删除 [左闭右闭]
+conn.llen(name=key)                     # 列表长度
+
+4. Set
+conn.sadd(name=key, value)           # 添加元素
+conn.smembers(name=key)              # 获取所有元素
+conn.srem(name=key, value)           # 删除元素
+conn.sismember(name=key, value)      # 判断是否存在
+conn.scard(name=key)                 # 集合大小
+
+2. Hash key → {field1: value1, field2: value2, ...}
+5. ZSet key → {member1: score1, member2: score2, ...}  # 有序集合, 内部自动按 score 从小到大默认排序

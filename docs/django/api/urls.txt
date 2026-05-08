@@ -1,0 +1,69 @@
+
+1. router = routers.DefaultRouter()
+   DRF提供的一个'自动路由器', 能自动根据 ViewSet 生成 标准 RESTFUL 风格的 CRUD URL
+
+
+2. router.register(URL前缀 prefix, viewSet, [base_name])
+   router.register(r'api/users', UserViewSet, basename='users')
+
+   告诉路由器: '我有一个视图集 UserViewSet, 请帮我生成以 /api/users/ 开头的 URL 路由'
+   1) /api/users/       {basename}-list:   users-list       list, create
+   2) /api/users/{pk}/  {basename}-detail: users-detail     retrieve, update/partial_update, destroy
+
+   basename 只用于生成 URL 的 name (给 reverse 用)
+   1) reverse('users-list')
+   2) reverse('users-detail', kwargs={'pk': 1})
+
+
+3. urlpatterns = [ path('', include(router.urls)), ]
+   把router 动生成的所有URL加入到 Django的总路由中; 这行代码等价于手动写出一堆 path (list, detail)
+
+   1) ModelViewSet
+   path('api/users/', UserViewSet.as_view({'get': 'list', 'post': 'create',}), name='user-list'),
+   path('api/users/<int:pk>/', UserViewSet.as_view({
+        'get': 'retrieve',
+        'put': 'update',
+        'patch': 'partial_update',
+        'delete': 'destroy',
+   }), name='user-detail'),
+
+   2) GenericViewSet
+   path('api/accounts/login_status/', AccountViewSet.as_view({'get': 'login_status'}), name='accounts-login-status'),
+   path('api/friendships/<int:pk>/followers/', FriendshipViewSet.as_view({'get': 'followers'}), name='friendship-followers'),
+
+
+4. urlpatterns = [ path('api-auth/', include('rest_framework.urls', namespace='rest_framework')), ]
+   添加DRF提供的一个'登录/注销'界面 仅浏览器页面用到; 'api-auth/login/' 'api-auth/logout/'
+   这样当你访问 /users/ 时, 页面右上角会出现 Login 按钮
+
+---------------------------------------------------------------------------------------------------------
+
+5. URL 生成规则
+1) DefaultRouter: 标准 CRUD URL 生成规则 (以 basename='users' 为例)
+
+| ViewSet Method  | URL Name       | URL Pattern           | HTTP Method |
+|-----------------|----------------|-----------------------|-------------|
+| list            | users-list     | /api/users/           | GET         |
+| create          | users-list     | /api/users/           | POST        |
+| retrieve        | users-detail   | /api/users/<pk>/      | GET         |
+| update⚠️        | users-detail   | /api/users/<pk>/      | PUT         |
+| partial_update  | users-detail   | /api/users/<pk>/      | PATCH       |
+| destroy         | users-detail   | /api/users/<pk>/      | DELETE      |
+
+⚠️ Serializer 中定义允许更新的 fields
+⚠️ 测试中需要 comment.refresh_from_db()
+
+
+2) 自定义 @action 的 URL 生成规则
+- URL Path  = prefix + [/pk/] + action_name
+- URL Name  = basename + action_name
+
+| 写法                                             | URL Path                             | URL Name               |
+| ------------------------------------------------| ------------------------------------ | ---------------------- |
+| @action(detail=False)                           | /api/accounts/login_status/          | accounts-login_status  |
+| @action(detail=True)                            | /api/accounts/<int:pk>/login_status/ | accounts-login_status  |
+| @action(detail=False, url_path="login-status")  | /api/accounts/login-status/          | accounts-login-status  |
+
+- detail=False → 作用于列表/当前会话, URL 不带 pk
+- detail=True  → 作用于单个对象,     URL 带 pk
+- DRF 默认保留下划线，如果想用连字符，需要指定 url_path='xxx-xxx'

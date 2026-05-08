@@ -34,7 +34,6 @@ class TweetTests(TestCase):
         self.assertEqual(self.tweet.like_set.count(), 2)
 
     def test_create_photo(self):
-        # 测试可以成功创建 photo 的数据对象
         photo = TweetPhoto.objects.create(
             tweet=self.tweet,
             user=self.taotao,
@@ -49,6 +48,7 @@ class TweetTests(TestCase):
         conn = RedisClient.get_connection()
         serialized_data = DjangoModelSerializer.serialize(instance=tweet)
         conn.set(name=f'tweet:{tweet.id}', value=serialized_data)
+
         data = conn.get(f'tweet:not_exists')
         self.assertEqual(data, None)
 
@@ -87,12 +87,13 @@ class TweetServiceTests(TestCase):
         self.assertEqual([tweet.id for tweet in tweets], tweet_ids)
 
     def test_create_new_tweet_before_get_cached_tweets(self):
+        conn = RedisClient.get_connection()
         tweet1 = self.create_tweet(user=self.taotao, content='tweet1')
+        key = USER_TWEETS_PATTERN.format(user_id=self.taotao.id)
+        self.assertEqual(conn.exists(key), True)
 
         # 1. cache miss
         self.clear_cache()
-        conn = RedisClient.get_connection()
-        key = USER_TWEETS_PATTERN.format(user_id=self.taotao.id)
         self.assertEqual(conn.exists(key), False)
 
         # 2. cache hit
@@ -100,6 +101,4 @@ class TweetServiceTests(TestCase):
         self.assertEqual(conn.exists(key), True)
 
         tweets = TweetService.get_cached_tweets(user_id=self.taotao.id)
-        self.assertEqual(
-            [tweet.id for tweet in tweets],
-            [tweet2.id, tweet1.id])
+        self.assertEqual([tweet.id for tweet in tweets],[tweet2.id, tweet1.id])

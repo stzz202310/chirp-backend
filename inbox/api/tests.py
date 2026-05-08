@@ -100,21 +100,24 @@ class NotificationApiTests(TestCase):
         # 1. 匿名用户无法访问 api
         response = self.anonymous_client.get(NOTIFICATION_URL)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
         # 2. zhuzhu 看到 0 条 notifications
         response = self.zhuzhu_client.get(NOTIFICATION_URL)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 0)
+
         # 3. taotao 看到 2 条 notifications
         response = self.taotao_client.get(NOTIFICATION_URL)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['count'], 2)
+
         # 4. 标记之后 看到一个未读
         notification = self.taotao.notifications.first()
         notification.unread = False
         notification.save()
         response = self.taotao_client.get(NOTIFICATION_URL)
         self.assertEqual(response.data['count'], 2)
-        # filterset_fields=('unread',) + request.query_params
+        # filterset_fields=('unread',): DRF 会根据 request.query_params 自动生成过滤条件
         response = self.taotao_client.get(NOTIFICATION_URL, data={'unread': False})
         self.assertEqual(response.data['count'], 1)
         response = self.taotao_client.get(NOTIFICATION_URL, data={'unread': True})
@@ -143,14 +146,16 @@ class NotificationApiTests(TestCase):
 
         # 3. 不可以被其他用户改变 notification 状态
         # 因为 get_queryset 是 filter(recipient=self.request.user 当前用户)
-        # 如果 本条通知 不属于 当前用户，会返回 404 而不是 403
+        # ⚠️ 如果 本条通知 不属于 当前用户，self.get_object() 查不到对象，自动返回 404
         response = self.zhuzhu_client.put(path=url, data={'unread': False})
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
         # 4. 成功标记为已读
+        unread_url = '/api/notifications/unread-count/'
+        response = self.taotao_client.get(path=unread_url)
+        self.assertEqual(response.data['unread_count'], 2)
         response = self.taotao_client.put(path=url, data={'unread': False})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        unread_url = '/api/notifications/unread-count/'
         response = self.taotao_client.get(path=unread_url)
         self.assertEqual(response.data['unread_count'], 1)
 

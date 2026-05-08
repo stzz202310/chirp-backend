@@ -1,0 +1,67 @@
+
+APP                 DB          Cache
+User                MySQL       Memcached
+UserProfile         MySQL       Memcached
+Comment             MySQL       NA
+Friendship          HBase       Memcached
+Like                MySQL       NA
+NewsFeed            HBase       Redis
+Tweet               MySQL       Memcached, Redis
+TweetPhoto          MySQL       NA
+
+Gatekeeper          Redis       'gatekeeper:switch_friendship_to_hbase': {'percent': int, 'description': 'XXX'}
+Celery Broker       Redis
+Ratelimit           Memcached
+
+┌─────────────┐
+│ Django App  │
+└──────┬──────┘
+       ├── MySQL       → 127.0.0.1:3306
+       ├── Redis       → 127.0.0.1:6379
+       ├── Memcached   → 127.0.0.1:11211
+       └── HBase       → 127.0.0.1:9090     HBase Thrift Server
+
+====================================================================================================
+
+from django.core.cache import caches
+from django.conf import settings
+cache = caches['testing'] if settings.TESTING else caches['default']
+caches['default']
+caches['testing']
+caches['ratelimit']
+
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+
+REDIS_DB = 0 if TESTING else 1
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/2' if not TESTING else 'redis://127.0.0.1:6379/0'
+
+
+TESTING     MySQL/HBASE     FILE_STORAGE        Memcached           Ratelimit               Redis/GK/Celery
+True        twitter         Amazon S3           caches['testing']   ✅caches['ratelimit']   0     0    0
+False       test_twitter    FileSystemStorage   caches['default']   ❌Disable               1     1    2
+
+====================================================================================================
+
+Memcached       key                                 value
+model           '{model_class}:{object_id}'         instance (序列化的单条对象)
+User            'user:{user_id}'                    User instance
+UserProfile     'userprofile:{user_id}'             UserProfile instance
+Tweet           'tweet:{tweet_id}'                  Tweet instance
+
+Followings      'followings:{user_id}'              set(user_ids)   用户{user_id}的关注列表
+
+⚠️ UserProfile 使用 user_id (instead of userprofile_id) 作为缓存的key, 因为 user_id 是业务主入口，也是多数表单的外键
+⚠️ 为什么不缓存 FOLLOWERS 粉丝列表?
+    1. 明星粉丝数量大 → 数据量巨大，缓存成本高
+    2. 明星粉丝更新频繁 → 缓存容易失效，命中率低
+
+
+Redis           key                               value
+Tweet           'user_tweets:{user_id}'           这个用户发的所有帖子 (序列化的 Tweet    对象: content, likes_count, ...)
+Newsfeed        'user_newsfeeds:{user_id}'        这个用户的新鲜事列表 (序列化的 NewsFeed 对象: user_id, tweet_id, ...)
+likes_count     'Tweet.likes_count:{tweet.id}'    这个帖子的点赞数
+comments_count  'Tweet.comments_count:{tweet.id}' 这个帖子的评论数
+
+✅ Redis 层: 计数单独缓存, 与 tweet 对象缓存解耦
+✅ DB 层: QuerySet.update() 不触发 signal, tweet 缓存不会被删除

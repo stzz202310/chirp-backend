@@ -1,17 +1,9 @@
-from django.contrib.contenttypes.models import ContentType
 from notifications.models import Notification
 from rest_framework import serializers
 
 
 class NotificationSerializer(serializers.ModelSerializer):
-    """""""""
-    verb = "给你的帖子{target}点了赞"
-    verb = "liked your tweet {target}"
-    前端：渲染
-    后端：提供数据；同一个api接口，支持不同的前端
 
-    TODO [HARD]: 展示具体的信息 instead of [content_type, object_id]
-    """
     class Meta:
         model = Notification
         fields = (
@@ -26,56 +18,15 @@ class NotificationSerializer(serializers.ModelSerializer):
             'timestamp',
             'unread',
         )
-        """
-        recipient = request.user
-        actor：发起动作的人/对象
-        verb：动作本身（如 “liked”, “commented”, “followed”）
-        action_object（可选）：动作的核心对象（如点赞的是一条评论）
-        target（可选）：动作发生的场景或最终目标（如评论属于哪篇文章）
-        
-        verb = '给你的帖子{target}点了赞'
-        verb = 'liked your tweet {target}'
-        
-        ✅ 例子 1：小明 点赞 了 小红的文章
-        actor：小明（User 对象）
-        verb：liked
-        action_object：无（也可以是 "Like" 实体）
-        target：小红的文章（Article 对象）
-        句子就是：
-        小明 (actor) liked (verb) 小红的文章 (target)
-        
-        ✅ 例子 2：小明 评论 了 小红的文章
-        actor：小明（User）
-        verb：commented
-        action_object：那条评论（Comment 对象）
-        target：文章（Article）
-        构成句子：
-        小明 (actor) commented (verb) a comment (action_object) on 小红的文章 (target)
-
-        ✅ 例子 3：小明 关注 了 小红
-        actor：小明
-        verb：followed
-        action_object：无
-        target：小红（User）
-        句子：
-        小明 (actor) followed (verb) 小红 (target)
-        
-        ✅ 例子 4：系统 推送 了 一条公告
-        actor：系统（SystemUser 或 None）
-        verb：published
-        action_object：公告（Announcement）
-        target：无或全部用户（看你实现）
-        """
+        # TODO [Homework] 将 content_type/object_id 转换为具体对象信息
 
 
 class NotificationSerializerForUpdate(serializers.ModelSerializer):
-    # BooleanField 会自动兼容 true|false, 'true'|'false', 'True'|'False', '1'|'0'
-    # 等情况，并都转换为 python 的 boolean 类型 True|False
     unread = serializers.BooleanField()
 
     class Meta:
         model = Notification
-        fields = ('unread',)    # 只有 unread 可以被更新
+        fields = ('unread',)    # 明确可更新字段白名单
 
     def update(self, instance, validated_data):
         instance.unread = validated_data.get('unread')

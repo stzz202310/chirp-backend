@@ -20,19 +20,11 @@ class UserService:
 
     @classmethod
     def get_profile_through_cache(cls, user_id):
-        # user profile 比较特殊
-        # 1. USER_PROFILE_PATTERN = 'userprofile:{user_id}'
-        # 2. get_or_create
         key = USER_PROFILE_PATTERN.format(user_id=user_id)
-
         profile = cache.get(key)
         if profile is not None:
             return profile
-        # 1. User.profile = property(get_profile)
-        # 2. def get_profile(user):
-        #       profile = UserService.get_profile_through_cache(user_id=user.id)
-        # 3. SignupSerializer.create: user.profile
-        # 根据 1, 2 和 3，user 一定是存在的，不需要额外的检查
+        # SignupSerializer.create: user.profile → user 一定存在, 不需要额外检查
         profile, _ = UserProfile.objects.get_or_create(user_id=user_id)
         cache.set(key, profile)
         return profile
