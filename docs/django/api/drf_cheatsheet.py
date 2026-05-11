@@ -78,14 +78,22 @@ class Serializer(serializers.ModelSerializer):
     user = UserSerializerForFriendship(source='from_user')          # instance = friendship.from_user
     comments = CommentSerializer(source='comment_set', many=True)   # queryset = tweet.comment_set
     
-    user = serializers.SerializerMethodField()
-    def get_user(self, obj):
+    tweet = serializers.SerializerMethodField()
+    def get_tweet(self, obj):
         # self: 当前 Serializer 实例
         # obj:  当前正在被序列化的 Model 实例
         ...
-        return UserSerializerForFriendship(instance=user).data  # ⚠️ .data
-        ✅ 如果自己控制序列化过程, 必须手动调用 .data         return CommentSerializer(...).data
-        ❌ DRF 自动处理 SerializerField 时无需手动 .data    comments = CommentSerializer(...)
+        return TweetSerializer(instance=obj.cached_tweet, context=self.context).data
+        return TweetSerializer(...) 返回 Serializer 对象而非数据 ❌
+        
+        1) .data
+        ModelSerializer 字段 (DRF 自动处理, 无需手动调用): tweet = TweetSerializer(...)
+        SerializerMethodField (自己控制序列化, 必须手动调用): return TweetSerializer(...).data
+        
+        2) context
+        ModelSerializer 字段: DRF 自动将 context 传入嵌套 Serializer
+        SerializerMethodField: 无自动传递，必须手动透传，否则嵌套 Serializer 拿不到 
+
 
     def __init__(self, instance=None, data=empty, **kwargs):
     

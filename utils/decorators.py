@@ -48,5 +48,5 @@ def required_params(method='GET', params=None):
 2. 调用阶段(真正执行函数)
    list(instance, request) = _wrapped_view(instance, request)       打印 3
 
-❌报错: return decorator() Python 会直接执行 decorator()，但是你还没传 view_func 进去
+❌ 常见错误 return decorator(): Python 会直接执行 decorator()，但未传入 view_func，会报错
 """

@@ -21,7 +21,7 @@ class MemcachedHelper:
 
         # 2. cache miss, read from database
         obj = model_class.objects.get(pk=object_id)
-        cache.set(key, obj)
+        cache.set(key, obj) # using default 'TIMEOUT'
         return obj
 
     @classmethod

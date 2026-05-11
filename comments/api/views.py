@@ -58,6 +58,7 @@ class CommentViewSet(viewsets.GenericViewSet):
 
     @method_decorator(ratelimit(key='user', rate='3/s', method='POST', block=True))
     def create(self, request, *args, **kwargs):
+        # create 权限为 IsAuthenticated 用户已登录, 因此直接使用 request.user.id, 无需额外校验
         data = {
             'user_id': request.user.id,
             'tweet_id': request.data.get('tweet_id'),

@@ -51,7 +51,6 @@ class CommentSerializerForCreate(serializers.ModelSerializer):
         tweet_id = attrs['tweet_id']
         if not Tweet.objects.filter(id=tweet_id).exists():
             raise ValidationError({'message': 'Tweet does not exist.'})
-            # 'user_id': request.user.id, 所以不用再检查
         return attrs
 
 class CommentSerializerForUpdate(serializers.ModelSerializer):

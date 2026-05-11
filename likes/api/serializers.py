@@ -42,7 +42,7 @@ class BaseLikeSerializerForCreateAndCancel(serializers.ModelSerializer):
         if data['content_type'] == 'comment':
             return Comment
         if data['content_type'] == 'tweet':
-           return Tweet
+            return Tweet
         return None
 
     def validate(self, data):

@@ -54,14 +54,14 @@ class UserViewSet(viewsets.GenericViewSet):
 
 1) 当执行取消赞
    如果数据库中没有对应的点赞记录 (deleted_entries == 0), 说明可能发生了请求乱序
-   将该“取消赞”操作写入缓存, 短时间内生效
+   将该"取消赞"操作写入缓存, 短时间内生效
 
    if deleted_entries = 0:
        cache.set('pre_cancel_like::tweet::{tweet_id}::user::{user_id}', True, timeout=1)
        {user_id} precancel {tweet_id}, 1s 内有效
 
 2) 当执行点赞时
-   检查是否存在对应的“预取消赞”缓存;
+   检查是否存在对应的"预取消赞"缓存;
    如果存在, 说明之前收到过取消赞, 当前点赞应被忽略(不执行) + 同时删除该缓存
 
    def create():
@@ -167,5 +167,5 @@ Polling (轮询): 前端定时主动发请求询问后端 "有没有新数据"
 
 修复后: created_at = models.DateTimeField()
        传入的字符串不再被忽略
-       ❌ 直接传字符串 → Django 序列化时 str.isoformat() 报错
-       ✅ 直接传字符串 → isoparse 还原为 datetime 再传入 → 正常
+       ❌ 直接传字符串                                 → Django 序列化时 str.isoformat() 报错
+       ✅ 直接传字符串 → isoparse 还原为 datetime 再传入 → Django 序列化时 datetime.isoformat() 正常

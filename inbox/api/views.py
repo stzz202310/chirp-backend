@@ -47,6 +47,23 @@ class NotificationViewSet(
     @required_params(method='PUT', params=['unread',])
     @method_decorator(ratelimit(key='user', rate='3/s', method='POST', block=True))
     def update(self, request, *args, **kwargs):
+        """
+        标记 notification 为已读或未读
+
+        选用 update 而非独立 action 的原因：
+          - 更符合 REST 语义 (对资源的部分更新)
+          - 已读 / 未读共用同一套逻辑，无需重复
+
+        备选方案 (两种 action):
+          POST /notifications/{id}/mark-as-read/
+          POST /notifications/{id}/mark-as-unread/
+
+          @action(methods=['POST'], detail=True, url_path='mark-as-read')
+          def mark_as_read(self, request, *args, **kwargs):
+
+          @action(methods=['POST'], detail=True, url_path='mark-as-unread')
+          def mark_as_unread(self, request, *args, **kwargs):
+        """
         serializer = NotificationSerializerForUpdate(
             instance=self.get_object(),
             data=request.data,

@@ -33,7 +33,7 @@ class FriendshipService(object):
     def get_following_user_id_set(cls, from_user_id):   # memcached 缓存
         # TODO [Homework] cache in redis set
         key = FOLLOWINGS_PATTERN.format(user_id=from_user_id)
-        user_id_set = cache.get(key)
+        user_id_set = cache.get(key)    # key 不存在 → 返回 None
         if user_id_set is not None:
             return user_id_set
 

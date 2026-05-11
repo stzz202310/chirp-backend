@@ -138,7 +138,7 @@ class LikeApiTests(TestCase):
         self.assertEqual(tweet.like_set.count(), 1)
         self.assertEqual(comment.like_set.count(), 1)
 
-        # 6. taotao successfully canceled [COMMENT] like
+        # 6. taotao successfully canceled COMMENT's like
         response = self.taotao_client.post(LIKE_CANCEL_URL, data=like_comment_data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['deleted'], True)
@@ -154,7 +154,7 @@ class LikeApiTests(TestCase):
         self.assertEqual(tweet.like_set.count(), 1)
         self.assertEqual(comment.like_set.count(), 0)
 
-        # 8. zhuzhu successfully canceled [TWEET] like
+        # 8. zhuzhu successfully canceled TWEET's like
         response = self.zhuzhu_client.post(LIKE_CANCEL_URL, data=like_tweet_data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['deleted'], True)

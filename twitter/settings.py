@@ -195,7 +195,7 @@ REDIS_PORT = 6379
 REDIS_DB = 0 if TESTING else 1
 REDIS_KEY_EXPIRE_TIME = 7 * 86400
 REDIS_LIST_LENGTH_LIMIT = 200 if not TESTING else 20
-# 控制列表最大长度 (例如 newsfeed 缓存), 防止无限增长导致内存压力
+# 控制 Redis 列表缓存的最大长度(newsfeed/tweet), 防止一次性从数据库读取过多数据, 降低 DB 压力和 Redis 内存占用
 
 CELERY_BROKER_URL = 'redis://127.0.0.1:6379/2' if not TESTING else 'redis://127.0.0.1:6379/0'
 # 测试与生产使用不同 Redis DB, 不要让 cache DB 和 broker DB 混用！

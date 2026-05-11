@@ -21,6 +21,7 @@ class Like(models.Model):
     class Meta:
         # 1. 保证同一个 user 不能对同一个对象重复点赞
         # 2. 查询某个 user 点赞过哪些 objects
+        # unique_together = index_together + unique 约束
         unique_together = (('user', 'content_type', 'object_id'),)
 
         # 1. 查询某个 Tweet / Comment 的所有 likes,      并按照 created_at 时间排序
@@ -46,7 +47,7 @@ class Like(models.Model):
             # ⚠️ self.user.id 会触发 ORM 查询, 会额外访问数据库，失去缓存意义
         )
 
-# 点赞后执行
+# ⚠️ 点赞后执行
 # 1. 数据更新   Like 表单, incr_likes_count[Tweet 表单, Redis]
 # 2. 发送通知   api.views.create() 中调用 send_like_notification
 pre_delete.connect(receiver=decr_likes_count, sender=Like)

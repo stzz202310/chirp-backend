@@ -7,6 +7,8 @@ from utils.memcached_helper import MemcachedHelper
 
 
 class Friendship(models.Model):
+    # user.following_friendship_set.all() = Friendship.objects.filter(from_user=user)
+    # user.follower_friendship_set.all()  = Friendship.objects.filter(to_user=user)
     from_user = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,

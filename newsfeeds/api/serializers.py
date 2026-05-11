@@ -15,11 +15,6 @@ class NewsFeedSerializer(serializers.Serializer):
         pass
 
     def get_tweet(self, obj):
-        # ModelSerializer: DRF 自动将 context 传递给嵌套 Serializer
-        #   tweet = TweetSerializer()                       ← context 自动传入
-        #   tweet = TweetSerializer(source='cached_tweet')  ← context 自动传入
-        #
-        # Serializer + SerializerMethodField: 无自动传递，需手动传入
         return TweetSerializer(instance=obj.cached_tweet, context=self.context).data
 
     def get_created_at(self, obj):

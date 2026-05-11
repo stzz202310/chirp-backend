@@ -36,6 +36,9 @@
    添加DRF提供的一个'登录/注销'界面 仅浏览器页面用到; 'api-auth/login/' 'api-auth/logout/'
    这样当你访问 /users/ 时, 页面右上角会出现 Login 按钮
 
+   MySQL: django admin 修改数据 → ORM .save() / .delete() → signal 正常触发
+   HBase: django Admin 操作不了 HBase; 因为 HBase 不是标准 ORM 管理的, Admin 界面里看不到, 也写不到 HBase 的数据
+
 ---------------------------------------------------------------------------------------------------------
 
 5. URL 生成规则

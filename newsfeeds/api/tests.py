@@ -151,23 +151,30 @@ class NewsFeedApiTests(TestCase):
         self.assertEqual(results[0]['tweet']['user']['username'], 'taotao')
         self.assertEqual(results[0]['tweet']['content'], 'taotao tweet')
 
-        # update username
+        # 1. update username
         self.taotao.username = 'pipi'
         self.taotao.save()
         response = self.zhuzhu_client.get(NEWSFEEDS_URL)
         results = response.data['results']
         self.assertEqual(results[0]['tweet']['user']['username'], 'pipi')
 
-        # update content
+        # 2. update tweet's content
+        # tweet.save() 触发 post_save 信号后：
+        # Memcached  ✅ 已更新（handler 无条件刷新）
+        # Redis      ❌ 不更新（handler 在 not created 时提前 return）
+        #
+        # 由此导致两个接口的行为不一致:
+        # GET /newsfeeds: NewsFeed 在 Redis 中只存了 tweet_id, 读取 tweet 内容时回落到 Memcached, 因此返回最新的 content ✅
+        # GET /tweets: 直接命中 Redis 中的旧 Tweet 对象, content 停留在修改前的值 ❌
         tweet.content = 'taotao tweet2'
-        tweet.save()    # if not created: return
+        tweet.save()
         response = self.zhuzhu_client.get(NEWSFEEDS_URL)
         results = response.data['results']
         self.assertEqual(results[0]['tweet']['content'], 'taotao tweet2')
 
         response = self.zhuzhu_client.get(TWEETS_URL, data={'user_id': self.taotao.id})
         results = response.data['results']
-        self.assertEqual(results[0]['content'], 'taotao tweet') # ⚠️ content 没有更新
+        self.assertEqual(results[0]['content'], 'taotao tweet') # ⚠️ 预期中的旧值（Redis 未失效）
 
     def _paginate_to_get_newsfeeds(self, client):
         # paginate until the end 模拟用户上拉加载更多

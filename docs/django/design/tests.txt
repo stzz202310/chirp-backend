@@ -27,9 +27,12 @@
 ============================================================
 1) 每个测试方法必须以 test_ 开头, 否则 Django TestRunner 不会自动执行
 
-2) 试 API 测试失败时的响应内容
-   4XX错误   报错时: print(response.data)    DRF解析前的响应数据, 原始响应内容 (bytes)
-   5XX错误   报错时: print(response.content) DRF解析后的响应数据, Python 对象 (dict)
+2) API 测试失败时的响应内容
+   4XX 客户端错误: DRF 正常处理请求, 返回结构化错误信息, response.data 可以正常解析
+   5XX 服务器错误: 服务器内部异常, DRF 可能未完成序列化, response.data 可能为空
+
+   4XX: print(response.data)    DRF 解析后的 Python 对象 (dict), 包含具体错误信息
+   5XX: print(response.content) 原始响应内容 (bytes), 包含完整错误堆栈
 
 3) 常见 404 错误原因汇总
    a. twitter.urls 中没有添加 router.register(...)
@@ -111,7 +114,7 @@
             hbase_model_class.create_table()
 
         def tearDown(self):
-            # tearDown 会在每个 test_xxx 运行后 被执行
+            # tearDown 会在每个 test_xxx 运行后 被执行, 无论测试成功或失败
             hbase_model_class.drop_table()
 
     执行流程(简化):
@@ -119,8 +122,8 @@
         self._pre_setup()     # Django 内部
         self.setUp()          # 用户定义 setUp (TestCase.setUp)
         self.test_xxx()
-    finally:
-        self.tearDown()       # TestCase.tearDown  ← 不论测试成功 或 失败, 一定执行
+    finally:                  # 不论测试成功 或 失败, 一定执行
+        self.tearDown()       # 用户定义 tearDown (TestCase.tearDown)
         self._post_teardown() # Django 内部（rollback）
 
     -------------------------------------------------------------------------

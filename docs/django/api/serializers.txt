@@ -16,7 +16,7 @@
 2) 做基础校验 (类型 / required / min_length / max_length 等)
 3) 将 request.data → validated_data
 
-使用场景 (如: 登陆 login)
+使用场景 (如: 登陆 login, 兼容 HBase / MySQL 多数据源的 Serializer)
 1) 不直接操作数据库
 2) 只做输入校验("前端必须传什么") + 业务逻辑
 
