@@ -1,0 +1,43 @@
+
+============================================================
+1. ContentType
+============================================================
+
+1️⃣ 基本概念
+   - ContentType 是 Django 内置模型，用于获取项目中任意模型的信息
+   - 常用于实现通用关系(Generic Relations), 例如 Like 可作用于多个模型 (Tweet, Comment)
+
+
+2️⃣ 数据库存储结构
+SELECT * FROM `django_content_type` ORDER BY `id`;
++----+---------------+--------------+
+| id | app_label     | model        |
++----+---------------+--------------+
+|  1 | admin         | logentry     |
+|  2 | auth          | permission   |
+|  4 | auth          | user         |
+|  5 | contenttypes  | contenttype  |
+|  9 | tweets        | tweet        |
+| 13 | comments      | comment      |
++----+---------------+--------------+
+
+SELECT * FROM `likes_like`;
++----+----------------------------+-----------+-----------------+---------+
+| id | created_at                 | object_id | content_type_id | user_id |
++----+----------------------------+-----------+-----------------+---------+
+|  1 | 2026-02-19 00:29:10.065692 |        19 |               9 |       2 |
+|  2 | 2026-02-19 00:29:50.160799 |         1 |              13 |       2 |
++----+----------------------------+-----------+-----------------+---------+
+
+
+3️⃣ 获取模型对应的 ContentType
+   from django.contrib.contenttypes.models import ContentType
+   tweet_ct = ContentType.objects.get_for_model(model=Tweet)
+   tweet_ct = ContentType.objects.get(id=9)
+   if tweet_ct.model_class() == Tweet: ...
+
+   print(tweet_ct)                  # <ContentType: Tweets | tweet>
+   print(tweet_ct.id)               # 9, ContentType 数据库 id
+   print(tweet_ct.app_label)        # 'tweets'
+   print(tweet_ct.model)            # 'tweet'
+   print(tweet_ct.model_class())    # <class 'tweets.models.Tweet'>

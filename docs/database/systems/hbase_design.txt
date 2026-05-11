@@ -1,0 +1,123 @@
+
+============================================================
+1. HBase / 分布式数据库中的数据热点问题
+============================================================
+
+数据热点 (Hotspot)
+1) 数据按 RowKey 的字典序 分布在不同 Region / 机器上
+2) 如果 RK 单调递增 (时间, ID), 新数据会集中写入到同一台或少数几台机器
+   导致 写入热点, 读取热点; 集群负载不均
+
+------------------------------------------------------------------------
+
+例如: friendships 用户关注
+1) user_id 越大 → 注册时间越晚 [新用户的 user_id 较大]
+2) 新用户: 登录频繁; 点关注 | 被关注频繁高
+   老用户: 行为稳定; 新关注频率低
+
+总结: 新数据访问频率高，旧数据访问频率低
+
+
+❌ RowKey 设计1 (容易产生热点)
+rk = user_id + created_at
+1) user_id, created_at 都是 单调递增
+2) 数据按顺序写入: 新数据集中在 RK 尾部
+
+机器1         机器2      机器3
+旧数据(低频)   中数据     新数据(高频 => 热点问题)
+
+⚠️ 分布式数据库的意义是 均摊访问量, 而不是按新旧程度分布
+
+------------------------------------------------------------------------
+
+✅ RowKey 设计2 (反转 Reversing: 打散顺序性, 让新数据均匀分布到不同机器)
+rk = reverse(user_id) + created_at
+user_id = 2132 =   0000 0000 0000 2132
+reverse(user_id) = 2312 0000 0000 0000
+⚠️ timestamp: int(time.time()*1000000) 正好 16 位，不需要补 0
+
+Padding(补零) 的作用:
+1. 解决字符串按字典序排序导致的数值顺序错误问题
+   例如: "1", "10", "2" → 排序结果不符合数值大小
+
+2. 统一长度，避免 reverse / 字符串操作导致的信息丢失
+   例如: 不补零会出现歧义
+   10  → reverse → 01 → 1
+   100 → reverse → 001 → 1
+
+查询需求
+✅ user_id = XX, ❌ user_id 范围查询
+✅ user_id = XX + timestamp 范围查询
+
+反转: 有序 → 无序, 范围查询失效
+user_id   ✅ 可以反转
+timestamp ❌ 不能反转
+
+
+============================================================
+2. MySQL vs HBase 设计对比: friendships_friendship Table
+============================================================
+
+1) 表结构
+   MySQL (Django ORM)
+   - 表字段: id, from_user_id, to_user_id, created_at
+   - index_together: ('from_user', 'created_at'), ('to_user', 'created_at')
+   - 本质: 每个联合索引 = 一棵独立的 B+Tree [可以理解为"额外的一张索引表"]
+          1 张数据表 + 2 个联合索引 ≈ 3 份有序数据结构
+
+   HBase
+   - 无二级索引, 每一个"index_together"都需要 单独一张表
+   - 查询能力由 RowKey 决定: RK = 查询条件的组合（等值 + 范围）
+     RK1 = from_user_id
+     RK2 = from_user_id + created_at
+     RK1: 仅支持 from_user_id = XX, 不支持 created_at 做范围查询
+     RK2: 等价于 MySQL index_together ('from_user', 'created_at')
+
+
+2) Meta 行为对比 [HBase]
+   - index_together:   通过 RowKey 设计 + 多表实现 (例如 HBaseFollower + HBaseFollowing 表设计)
+   - unique_together:  无数据库级约束，需要在应用层自行保证唯一性
+   - ordering:         基于 RowKey 的字典序排序 (字符串排序规则)
+
+
+3) Signal / 缓存失效机制
+   MySQL (Django ORM)
+   - model.save()   → pre_save / post_save
+   - model.delete() → pre_delete / post_delete
+   - Django 自动发送 signal
+
+   HBase Model
+   - 不走 Django ORM [pre_delete / post_save 不会自动触发]
+   - 正确做法：在「写 / 删 HBase」的地方主动失效缓存
+   - friendships.models.hbase_friendship: 课程的示例代码在测试中没有报错, 是因为所有数据都是直接从数据库中读取的, 没有使用缓存
+
+
+4) MySQL → HBase 迁移兼容方案
+   1. GateKeeper 灰度切换
+   percent =   0% → 全量走 MySQL
+   percent = 100% → 全量走 HBase
+
+   2. Serializer 解耦
+   ModelSerializer (绑定 ORM) → Serializer (与 ORM 解耦)
+
+   3. Serializer 需手动实现
+   - fields: SerializerMethodField()
+   - 写操作:  create() / update()
+
+
+============================================================
+3. 为什么 Friendship / Newsfeed 适合使用 HBase 存储
+============================================================
+1) 数据量大 (Newsfeed: 系统中数据量最大的表)
+   - 传统关系型数据库在超大表下: 索引维护成本高, 扩展性受限
+   - HBase 天然适合存储海量行数据
+
+2) 写多读少, 且写入模式友好
+   - 典型场景 Newsfeed
+     1次读操作通常只对应一次数据读取
+     1次写操作可能会触发多次 fanout 写入
+   - HBase 对高吞吐写入 (batch / 顺序写) 非常友好
+
+3) 表结构简单(字段少、结构稳定), 查询需求有限
+   Friendship 表: {字段 from_user, to_user, created_at}
+   Newsfeed   表: {字段 user, tweet, created_at}

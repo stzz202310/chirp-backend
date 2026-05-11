@@ -1,0 +1,171 @@
+
+01. accounts.api.serializers    TODO [Homework] 增加验证 username 是不是只由给定的字符集合构成
+02. docs.databases.ratelimit    TODO [Homework] 自己实现令牌法, django-ratelimit 优化
+03. twitter.urls                TODO [Myself]   ❌ 不推荐：/api/profiles/{profile_id}/
+04. docs.db.optimization        TODO [Homework] DROP FOREIGN KEY CONSTRAINT
+05. comments.api.views          TODO [Homework] 有权限看这个tweet的用户, 才有权限看这个tweet的评论
+06. likes.listeners             TODO [Homework] 增加 Comment.likes_count, 类似 Tweet.likes_count
+07. likes.services              TODO [Homework] 优化 [comments x 10].has_liked
+08. likes.api.serializers       TODO [Homework] 前端发送 {点赞 + 取消赞}, 后端先收到 {取消赞} 后收到 {点赞}
+09. inbox.api.serializers       TODO [Homework] 将 content_type/object_id 转换为具体对象信息
+10. tweets.models.tweet         TODO [Myself]   Tweet & Newsfeed Redis 缓存设计
+11. django_hbase.models.fields  TODO [Homework] 增加 is_required/default 属性, 默认值为 true/None,
+                                                并在 hbase_models 中做相应的处理, 抛出相应的异常信息
+12. .models.hbase_models        TODO [Homework] 实现一个 get_or_create 的方法, 返回 (instance, created)
+13. friendships.services        TODO [Homework] cache in redis set instead of memcached
+14. utils.paginations           TODO [Homework] snowflake instead of created_at
+15. utils.paginations           TODO [Homework] 优化"下拉刷新"
+16. tweets.api.serializers      TODO [Myself]   cache.get_many(keys), 然后再处理 cache miss
+17. tweets.api.views            TODO [Homework] 通过 query 参数 with_all_comments, 控制是否返回全部评论
+                                                通过 query 参数 with_preview_comments, 控制是否返回前三条评论
+18. newsfeeds.api.views         TODO [Homework] 新内容提示 "你有 N 条新内容", 这个功能是怎么实现的?
+19. newsfeeds.models.newsfeed   TODO [Complete] created_at 应等于 tweet.created_at，而非 auto_now_add=True
+
+
+============================================================
+3. UserProfile API 设计说明
+============================================================
+背景：
+- User 与 UserProfile 是一对一关系
+- user_id 与 userprofile_id 并不保证相等 (各自是独立表的主键)
+
+❌ 错误设计 /api/profiles/{profile_id}/
+问题：
+- 前端必须先知道 profile_id（后端实现的细节）
+- 一旦 profile 表结构或生成策略变化，API 设计被锁死
+
+✅ 正确设计 /api/users/{user_id}/profile/
+原则：
+- 前端只认 user_id (业务主键)
+- 后端负责 User → UserProfile 的映射
+- profile 表如何拆分、合并、缓存，前端完全无感
+
+router.register(r'api/users', UserViewSet, basename='users')
+class UserViewSet(viewsets.GenericViewSet):
+    @action(methods=['get'], detail=True, url_path='profile')
+    def profile(self, request, pk=None): ...
+
+
+============================================================
+8. 处理点赞 / 取消赞请求乱序问题
+============================================================
+
+解决方案: 使用短期缓存记录"预取消赞"状态 (pre-cancel like)
+
+1) 当执行取消赞
+   如果数据库中没有对应的点赞记录 (deleted_entries == 0), 说明可能发生了请求乱序
+   将该"取消赞"操作写入缓存, 短时间内生效
+
+   if deleted_entries = 0:
+       cache.set('pre_cancel_like::tweet::{tweet_id}::user::{user_id}', True, timeout=1)
+       {user_id} precancel {tweet_id}, 1s 内有效
+
+2) 当执行点赞时
+   检查是否存在对应的"预取消赞"缓存;
+   如果存在, 说明之前收到过取消赞, 当前点赞应被忽略(不执行) + 同时删除该缓存
+
+   def create():
+       cache_key = f'pre_cancel_like::tweet::{tweet_id}::user::{user_id}'
+       if cache.get(cache_key):
+           cache.delete(cache_key)
+           return  # 忽略本次点赞操作
+       # 正常执行点赞逻辑
+
+
+============================================================
+10. Tweet & Newsfeed Redis 缓存设计
+============================================================
+Tweet API 接口设计: 获取推文, 创建推文, 不支持删除推文 和 修改推文
+
+缓存结构:
+  Memcached  key: 'tweet:{tweet_id}'        value: 序列化的单条 Tweet 对象 (点查)
+  Redis      key: 'user_tweets:{user_id}'   value: 该用户发的所有 tweet 列表
+  Redis      key: 'user_newsfeeds:{user_id} value: 该用户的 newsfeed 列表
+
+
+1) Tweet Redis 缓存方案对比
+----------------------------------------------------------------
+方法 1: 只缓存 id 列表
+  value: [tweet_id_1, tweet_id_2, ...]
+  优点: 内存占用小; 删除/编辑只需动 Memcached, 无需更新 id 列表
+  缺点: 读取需要二次查询
+
+方法 2: 缓存完整序列化对象 (当前方案)
+  value: [序列化的 tweet 对象, ...]
+  优点: 读取无需二次查询，性能最优; 实现简单
+  缺点: 内存占用大; 删除/编辑 tweet 时必须同步更新缓存，否则脏数据
+
+方法 3: 方法 1 + Memcached 双层组合缓存
+  创建 tweet : 写 DB → 写 Memcached → lpush Redis id 列表
+  删除 tweet : 软删除 DB → 删除 Memcached (无需动 id 列表)
+  编辑 tweet : 更新 DB → 删除 Memcached (无需动 id 列表)
+  查看 tweet : Redis 取 id 列表
+               → Memcached.get_many(ids) 批量取
+               → cache miss: Tweet.objects.filter(id__in=[...]) 补查 DB
+
+
+2) Newsfeed Redis 缓存方案对比
+----------------------------------------------------------------
+只缓存 id 列表 + 软删除 (has_deleted)
+  删除 tweet  → 标记 has_deleted=True → 删除 Memcached (无需动 id 列表)
+  读取列表    → 跳过 has_deleted=True 的条目
+
+
+3) 取关后的 Newsfeed 处理
+----------------------------------------------------------------
+场景:
+  1. A 关注 B
+  2. B 发 tweet1 → fanout → NewsFeed(user=A, tweet=tweet1)
+  3. A 取关 B
+
+方法1: 取关时主动清理 (写时处理)
+  取关(重): 批量标记 NewsFeed is_deleted=True
+  读取(轻): 无额外逻辑
+
+方法2: 读取时过滤 (读时处理)
+  取关(轻): 无额外逻辑
+  读取(重): 每次需要额外过滤
+
+  Twitter / 微博 选方法1: 用低频操作的额外代价，换取高频操作的性能
+  取关是极低频操作 (一天取关几次), 代价高一点可以接受
+  读取是极高频操作 (一天刷几百次), 必须保证轻量快速
+
+
+============================================================
+15. 优化"下拉刷新"
+============================================================
+1) 下拉刷新: 简单起见, 下拉刷新不做翻页机制, 直接加载[所有]新数据
+   长期未刷新, 新帖子过多: 不采用下拉刷新, 而是重新加载首页 (例: 仅显示最新 20 条, 不与旧帖子拼接)
+
+2) 如何处理翻页结果中的无权限内容? (已删除 / 黑名单 / 白名单)
+   先 queryset 取数据，再在内存中过滤权限，而非在 queryset 中直接筛选 (效率过低)
+   例: page_size=3，用户A无权查看帖子9和帖子4
+       第一次查询 → [9, 8, 7]，过滤9 → 返回 [8, 7]  (不足 page_size)
+       第二次查询 → [6, 5, 4]，过滤4 → 返回 [6, 5]
+       最终拼接   → [8, 7, 6, 5, ...]  (需多次补充查询才能凑满一页)
+
+
+============================================================
+18. 轮询 Polling
+============================================================
+PUSH: 后端主动推送给前端 (WebSocket / SSE)
+PULL: 前端主动拉取      (轮询 Polling / 长轮询 Long Polling)
+Polling (轮询): 前端定时主动发请求询问后端 "有没有新数据"
+
+新内容提示 "你有 N 条新内容", 这个功能是怎么实现的?
+1) 前端轮询: 每隔 30s → GET /api/newsfeed/?created_at__gt=<最新ts>&only_count=True
+2) 后端返回: count, 前端显示提示 "你有 N 条新内容"
+
+
+============================================================
+19. newsfeed.created_at 冗余自 tweet.created_at
+============================================================
+修复前: created_at = models.DateTimeField(auto_now_add=True)
+       NewsFeed.objects.create(created_at='2025-01-01')
+       传入的字符串被忽略, 自动填入 created_at = datetime.now(),
+       但 newsfeed.created_at != tweet.created_at
+
+修复后: created_at = models.DateTimeField()
+       传入的字符串不再被忽略
+       ❌ 直接传字符串                                 → Django 序列化时 str.isoformat() 报错
+       ✅ 直接传字符串 → isoparse 还原为 datetime 再传入 → Django 序列化时 datetime.isoformat() 正常

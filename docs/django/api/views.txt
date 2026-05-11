@@ -1,0 +1,77 @@
+
+============================================================
+1. ViewSet
+============================================================
+
+| 特性          | ViewSet               | GenericViewSet            | ModelViewSet                      |
+|--------------|---------------------- |---------------------------|-----------------------------------|
+| 继承          | 基础 ViewSet          | GenericAPIView + ViewSet  | GenericViewSet + CRUD mixins      |
+| 默认 CRUD URL | ❌ 不生成             | ❌ 不生成                  | ✅ 自动生成 list/detail/create...  |
+| 用途          | 纯行为接口, 如登录      | 关系型操作，复杂行为，分页    | 标准 CRUD                          |
+| URL          | 需通过 @action         | 需通过 @action             | 自动生成 list/detail + 可加 @action |
+
+1️⃣ ViewSet
+   最基础，什么都不自动生成
+   适合登录 / 注销 / 当前用户状态等纯行为接口
+   [queryset, serializer_class] 完全不强制，纯行为接口，@action 可以自己控制
+    
+2️⃣ GenericViewSet [白名单: 需要什么加什么]
+   提供 queryset、serializer_class、pagination_class 等基础设施
+   不自动生成 CRUD，需要 @action 或手写 URL
+   如果涉及对象查询或序列化 例如 detail=True / pagination / @action, 必须提供 queryset + serializer
+   如不涉及对象查询或序列化 例如 简单返回 JSON 响应, 可以不提供 queryset + serializer
+    
+3️⃣ ModelViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin,..., GenericViewSet)
+   [尽量不要用] 自动生成标准 CRUD URL（list/detail/create/update/partial_update/destroy）
+   @action 依然可以增加自定义行为
+   必须提供 queryset 或者重写 get_queryset()
+   必须提供 serializer_class
+    
+   GenericViewSet / ModelViewSet 提供: get_object(), get_queryset(), get_serializer()
+   ViewSet 不提供，需要你自己实现
+
+
+============================================================
+2. DjangoFilterBackend
+============================================================
+
+class CommentViewSet(viewsets.GenericViewSet):
+    filterset_fields = ('tweet_id',)
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        
+        # comments = queryset.filter(tweet_id=request.query_params.get('tweet_id'))
+        comments = self.filter_queryset(queryset=queryset)
+        
+        1. REST_FRAMEWORK = {'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend',],}
+        2. DjangoFilterBackend 会根据 filterset_fields 去过滤 queryset
+        3. DRF 会根据 ✅ request.query_params [❌ request.data] 自动生成过滤条件
+        
+        有多个筛选项时，会很方便
+        filterset_fields = ('a', 'b', 'c',...)
+        queryset = self.get_queryset()
+        queryset = self.filter_queryset(queryset=queryset)
+        
+        OR
+        
+        if 'a' in request.query_params:
+	        queryset = queryset.filter(a = request.query_params.get('a'))
+        if 'b' in request.query_params:
+	        queryset = queryset.filter(b = request.query_params.get('b'))
+        ......
+
+
+============================================================
+3. request vs self.request
+============================================================
+
+1) DRF 的 action 方法是作为"普通方法"被调用的，需要显式接收 request 参数
+   @action(methods=['GET'], detail=False, url_path='unread-count')
+   def unread_count(self, request, *args, **kwargs):
+
+2) self.request 是 DRF 在 dispatch 时设置的属性 self.request = request, 方便在 ViewSet 的其他方法中访问
+   dispatch: 根据请求类型 (GET / POST / PUT / DELETE), 把请求分发到对应的方法去处理
+   
+   def get_queryset(self):
+       return Notification.objects.filter(recipient=self.request.user)

@@ -31,46 +31,13 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
 
 class AccountViewSet(viewsets.ViewSet): # 登陆 注册
     serializer_class = SignupSerializer
-    """
-    urls.py
-    router = DefaultRouter()
-    router.register(r'blogs', views.BlogViewSet)
 
-    DRF 的 DefaultRouter 会帮你自动生成一系列 URL:
-    | Action/Serializer Field | URL Name                              | URL Pattern            |
-    | ----------------------- | ------------------------------------- | ---------------------- |
-    | list                    | `blog-list`                           | `/blogs/`              |
-    | retrieve                | `blog-detail`                         | `/blogs/<pk>/`         |
-    | update / partial_update | `blog-update` / `blog-partial-update` | `/blogs/<pk>/`         |
-    | destroy                 | `blog-destroy`                        | `/blogs/<pk>/`         |
-    | custom action `content` | `blog-content`                        | `/blogs/<pk>/content/` |
-
-    注意最后一行: 因为 BlogViewSet 里，我们定义了一个自定义 action
-    DRF 会自动为这个 @action 生成一个 URL，并且默认命名规则是 <basename>-<action_name>
-    
-    basename  = accounts
-    action    = login_status
-    url name  = accounts-login_status
-    
-    DRF 不会把下划线自动转成连字符，URL name 保留下划线 (如果你愿意用 -，需要自己指定 url_path='login-status')
-    
-    | 写法                                              | URL Path                      | URL Name                |
-    | ------------------------------------------------ | ----------------------------- | ----------------------- |
-    | `@action(detail=False)`                          | `/api/accounts/login_status/` | `accounts-login_status` |
-    | `@action(detail=False, url_path="login-status")` | `/api/accounts/login-status/` | `accounts-login-status` |
-
-    
-    detail=True   单个对象    /api/accounts/{pk}/login_status/  def login_status(self, request, pk):
-    detail=False  列表       /api/accounts/login_status/       def login_status(self, request):
-    request 代表“当前发起这次请求的用户”;
-    """
-    @action(methods=['GET'], detail=False)  # 作用于当前会话的动作: detail=False
+    @action(methods=['GET'], detail=False)
     @method_decorator(ratelimit(key='ip', rate='3/s', method='GET', block=True))
     def login_status(self, request):
-        # 查看用户当前的登录状态和具体信息
         data = {
             'has_logged_in': request.user.is_authenticated,
-            'ip': request.META.get('REMOTE_ADDR'),
+            'ip': request.META['REMOTE_ADDR'],  # twitter.settings: INTERNAL_IPS = ['10.0.2.2',]
         }
         if request.user.is_authenticated:
             # request.user 已经在内存中了，不需要通过 缓存
@@ -86,7 +53,7 @@ class AccountViewSet(viewsets.ViewSet): # 登陆 注册
     @action(methods=['POST'], detail=False)
     @method_decorator(ratelimit(key='ip', rate='3/s', method='POST', block=True))
     def login(self, request):
-        serializer = LoginSerializer(data=request.data) # get username and password from request
+        serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(data={
                 "success": False,
@@ -94,11 +61,9 @@ class AccountViewSet(viewsets.ViewSet): # 登陆 注册
                 "errors": serializer.errors,
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        username = serializer.validated_data.get('username')
-        password = serializer.validated_data.get('password')
+        username = serializer.validated_data['username']
+        password = serializer.validated_data['password']
 
-        # queryset = User.objects.filter(username=username)
-        # print(queryset.query)
         # if not User.objects.filter(username=username).exists():
         #     return Response({
         #         "success": False,
@@ -138,10 +103,10 @@ class AccountViewSet(viewsets.ViewSet): # 登陆 注册
         }, status=status.HTTP_201_CREATED)
 
 
-class UserProfileViewSet(   # 资料更新
+class UserProfileViewSet(
     viewsets.GenericViewSet,
     viewsets.mixins.UpdateModelMixin,
 ):
     queryset = UserProfile
-    permission_classes = (IsAuthenticated, IsObjectOwner,)
     serializer_class = UserProfileSerializerForUpdate
+    permission_classes = (IsAuthenticated, IsObjectOwner,)  # AND

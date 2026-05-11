@@ -1,6 +1,7 @@
-from datetime import datetime
-import pytz
+from django.utils import timezone
 
 
 def utc_now():
-    return datetime.utcnow().replace(tzinfo=pytz.utc)
+    # 在 twitter.settings 中设置 USE_TZ = True,
+    # timezone.now() 会返回一个 UTC 时间
+    return timezone.now()

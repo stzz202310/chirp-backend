@@ -9,18 +9,12 @@ from django.utils.timezone import is_aware
 
 
 class JSONEncoder(DjangoJSONEncoder):
-    """
-    JSONEncoder subclass that knows how to encode date/time, decimal types, and
-    UUIDs.
-    """
+    # JSONEncoder 修改: 保留完整 microsecond (6位)，提升时间精度
     def default(self, o):
-        # See "Date Time String Format" in the ECMA-262 specification.
         if isinstance(o, datetime.datetime):
             r = o.isoformat()
-            # created_at: 数据库类型 datetime(6)
-            # 唯一修改的地方，保留 micro second[23, 24, 25] 增加时间精度
             # if o.microsecond:
-            #     r = r[:23] + r[26:]
+            #     r = r[:23] + r[26:] ← 截取到毫秒，跳过后3位微秒 [23, 24, 25]
             if r.endswith('+00:00'):
                 r = r[:-6] + 'Z'
             return r

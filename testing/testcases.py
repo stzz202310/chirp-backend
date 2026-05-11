@@ -13,56 +13,8 @@ from newsfeeds.services import NewsFeedService
 from tweets.models import Tweet
 from utils.redis_client import RedisClient
 
-"""
-create {comment, tweet, like, newsfeed}
-1. 前端要求创建 via API
-2. 测试要求创建 via testcases.create_tweet(user=user)
-"""
+
 class TestCase(DjangoTestCase):
-    """""""""
-    transaction 事务 是数据库层面的概念
-    | 特性         | 含义    |
-    | ----------- | ------- |
-    | Atomicity   | 原子性   | 要么全做，要么全不做
-    | Consistency | 一致性   |
-    | Isolation   | 隔离性   |
-    | Durability  | 持久性   |
-
-    1. 最原始的事务写法 (SQL)
-    BEGIN;
-    INSERT INTO tweet ...;
-    INSERT INTO timeline ...;
-    COMMIT;     如果没异常
-    ROLLBACK;   如果抛异常
-    
-    2. Django 中的 transaction API
-    from django.db import transaction
-    transaction.commit()
-    transaction.rollback()
-    with transaction.atomic():
-        # BEGIN
-        do_something()
-        # COMMIT or ROLLBACK [抛异常 → 自动 rollback]
-
-    3. python manage.py test
-    │
-    ├─ CREATE DATABASE test_twitter; 创建 test_twitter 数据库
-    │
-    ├─ 运行 test case (TestCase)
-    │   ├─ BEGIN
-    │   ├─ test_xxx
-    │   └─ ROLLBACK     不论测试方法正常结束，还是抛异常，最后都会执行 ROLLBACK
-    │
-    └─ DROP DATABASE test_twitter; ← 测试结束
-    
-    TestCase: 在每个测试方法外面包了一层 transaction.atomic()
-    TestCase 的 atomic 行为是: ❌不允许 commit  ✅只用来隔离测试
-    测试正常通过                      测试失败|抛异常
-    BEGIN                           BEGIN
-        INSERT user                     INSERT user
-        ASSERT OK                       AssertionError
-    ROLLBACK    数据回滚             ROLLBACK      数据同样回滚
-    """
 
     hbase_tables_created = False
 
@@ -70,18 +22,11 @@ class TestCase(DjangoTestCase):
         self.clear_cache()
         try:
             self.hbase_tables_created = True
-            # __subclasses__(): 用来查看某个类的"直接子类"
-            # class A: pass
-            # class B(A): pass
-            # class C(B): pass      C 不是 A 的直接子类
-            # A.__subclasses__()    [<class '__main__.B'>]
             for hbase_model_class in HBaseModel.__subclasses__():
                 hbase_model_class.create_table()
         except Exception:
             self.tearDown()
             raise
-        # except Exception as e:
-        #   raise e
 
     def tearDown(self):
         if not self.hbase_tables_created:
@@ -89,45 +34,9 @@ class TestCase(DjangoTestCase):
         for hbase_model_class in HBaseModel.__subclasses__():
             hbase_model_class.drop_table()
 
-    """
-    情况 1
-    class TestAPI(TestCase):
-        pass
-    
-    DjangoTestCase.setUp()
-    └─ TestCase.setUp()
-    
-    tearDown(): 不论测试通过, 失败(assert 失败), 还是抛异常, 都会执行 TestCase.tearDown()
-    try:
-        self._pre_setup()     # Django 内部
-        self.setUp()          # TestCase.setUp
-        self.test_xxx()
-    finally:
-        self.tearDown()       # TestCase.tearDown  ← 一定执行
-        self._post_teardown() # Django 内部（rollback）
-    ====================================================================
-    情况 2
-    class TestAPI(TestCase):
-        def setUp(self):
-            do_something()
-    
-    DjangoTestCase.setUp()
-    └─ TestAPI.setUp()
-    ====================================================================
-    情况 3
-    class TestAPI(TestCase):
-        def setUp(self):
-            super().setUp() # 👈 关键
-            do_something_else()
-            
-    DjangoTestCase.setUp()
-    └─ TestCase.setUp()
-       └─ TestAPI.setUp()
-    """
-
     def clear_cache(self):
         caches['testing'].clear()
-        RedisClient.clear()
+        RedisClient.clear() # ⚠️ 测试环境: Redis/Gatekeeper/Celery 的数据都会被清空
         GateKeeper.turn_on(gk_name='switch_newsfeed_to_hbase')
         GateKeeper.turn_on(gk_name='switch_friendship_to_hbase')
 
@@ -137,11 +46,6 @@ class TestCase(DjangoTestCase):
         # 在当前测试用例实例上缓存一个 _anonymous_client, 实现 APIClient 单例复用
         # 类似地，QuerySet 在 Django 内部也有 instance 级别的缓存机制
         if hasattr(self, '_anonymous_client'):
-            # hasattr(obj, key)
-            # getattr(obj, key, default=None)
-            # setattr(obj, key, value)
-            # ⚠️ key 必须是字符串 (str)
-            # ⚠️ value 几乎没有类型限制 (int, str, list, dict, None, 自定义对象)
             return self._anonymous_client
         self._anonymous_client = APIClient()
         return self._anonymous_client
@@ -151,30 +55,23 @@ class TestCase(DjangoTestCase):
             password = 'generic password'
         if email is None:
             email = f'{username}@zhuzhu.com'
-        # 不能写成 User.objects.create()
-        # 因为 password 需要被加密, username 和 email 需要进行一些 normalize 处理
         return User.objects.create_user(
             username=username,
             email=email,
             password=password,
-        )
+        )   # ⚠️ 不会自动创建关联的 UserProfile, 需显式访问 user.profile
 
     def create_user_and_client(self, *args, **kwargs):
-        # * 展开 list
-        # a = [1, 2], b = [3, 4]
-        # c = [a, b]        c = [[1, 2], [3, 4]]
-        # c = [*a, * b]     c = [1, 2, 3, 4]        展开
-
-        # ** 展开 dict
-        # a = {'x': 1}, b = {'y': 2}
-        # c = [a, b]        c = [{'x': 1}, {'y': 2}]
-        # c = {*a, *b}      c = {'x', 'y'}
-        # c = {**a, **b}    c = {'x': 1, 'y': 2}
-
-        # func(**{'x': 1, 'y': 2}) 等价于 func(x=1, y=2)
-        # func(**[kwargs:一个dict]) 等价于 func(**kwargs: 将一个dict解包为关键字参数)
         user = self.create_user(*args, **kwargs)
+
+        # APIClient 是 DRF 提供的测试客户端
+        # - 类似于"模拟一个浏览器/HTTP 客户端"
+        # - 用于在测试中发起 API 请求 (GET / POST / PUT 等)
         client = APIClient()
+
+        # - 在测试中强制将请求视为「已登录状态」
+        # - 直接绕过认证流程（不走 login / token / session）
+        # - 后续通过该 client 发出的请求，request.user 都是该 user
         client.force_authenticate(user=user)
         return user, client
 
@@ -199,14 +96,7 @@ class TestCase(DjangoTestCase):
         # target__class__ is Comment OR Tweet
         instance, _ = Like.objects.get_or_create(
             user=user,
-            content_type=ContentType.objects.get_for_model(target.__class__),
+            content_type=ContentType.objects.get_for_model(model=target.__class__),
             object_id=target.id,
         )
-        # 7     tweets      tweet
-        # c = ContentType.objects.get(id = 7)
-        # c = ContentType.objects.get_for_model(Tweet)
-        # print(c)                  <ContentType: Tweets | tweet>
-        # print(c.id)               7
-        # print(c.app_label)        'tweets'
-        # print(c.model_class())    <class 'tweets.models.Tweet'>   if c.model_class() == Tweet:
         return instance

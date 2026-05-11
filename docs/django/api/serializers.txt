@@ -1,0 +1,157 @@
+
+============================================================
+1. Serializer vs ModelSerializer
+============================================================
+
+🔹 Serializer (基础序列化器)
+
+本质: 处理 request.data (用户输入), 完全不知道 Model 的存在
+1) ❌ 不绑定 Model(不需要 Meta.model)
+2) 需要手动定义字段
+3) 不会自动生成 create() / update()
+4) serializer.save() 是否可用 → 取决于你是否实现了 create()/update()
+
+字段定义作用
+1) 声明要接收的字段
+2) 做基础校验 (类型 / required / min_length / max_length 等)
+3) 将 request.data → validated_data
+
+使用场景 (如: 登陆 login, 兼容 HBase / MySQL 多数据源的 Serializer)
+1) 不直接操作数据库
+2) 只做输入校验("前端必须传什么") + 业务逻辑
+
+---------------------------------------------------------------
+
+🔹 ModelSerializer (模型序列化器)
+
+1) ✅ 绑定 Model (必须写 Meta.model)
+2) 自动生成字段 (基于 Model)
+3) 提供默认 create() / update()
+4) serializer.save() → 直接操作数据库
+
+使用场景 (如: 注册, 发帖): 创建/更新数据库对象 (CRUD)
+
+自动生成字段 (重要❗)
+1) 没有手动定义: 使用 Model 的字段校验
+2) 手动定义字段: 覆盖 Model 的字段校验
+   username = models.CharField(max_length=10)
+   username = serializers.CharField(max_length=20)
+   serializer 校验用 max_length=20, 数据库仍然限制 max_length=10
+
+
+============================================================
+2. Serializer + Model 校验流程
+============================================================
+
+1. models.py: serializer.is_valid() 流程
+   1) 字段级验证 (Field-level validation)
+      - DRF 内置验证：类型(CharField / EmailField 等), required, max_length、read_only
+
+   2) 自定义字段级验证方法 (Optional): 可对单个字段做进一步校验
+      - serializers.py: def validate_<field>(self, data)
+
+   3) 全局验证
+      - serializers.py: def validate(self, data)
+      - 返回值会成为 serializer.validated_data
+      - 可抛 ValidationError 拦截整个输入
+
+   4) (仅 ModelSerializer) 自动添加部分 Model 校验 [unique=True, unique_together]
+      没有手动定义: 使用 Model 的字段校验
+      手动定义字段: 覆盖 Model 的字段校验
+
+
+2. models.py:      serializer.save()
+   serializers.py: def create(self, validated_data) / def update(self, instance, validated_data)
+                   instance.save() → 写入数据库
+
+
+3. 数据库 (最终校验，兜底)
+   SQL INSERT/UPDATE 时检查 Django model
+   - 模型字段约束：max_length、blank、null 等
+   - unique / unique_together / FK constraints
+
+
+============================================================
+3. Meta.fields
+============================================================
+
+1) TweetSerializerForCreate (写 反序列化): 前端 → 后端  data=request.data → validated_data → 存入数据库
+2) TweetSerializer          (读 序列化):   后端 → 前端  instance → response JSON 返回部分信息给前端，用于前端展示
+
+两个方向都受 Meta.fields 白名单控制
+
+class TweetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tweet
+        fields = ('id', 'user', 'created_at', 'content', 'photo_urls', ...)
+
+---------------------------------------------------------------
+
+class TweetSerializerForCreate(serializers.ModelSerializer):
+
+    # ❗files 不是 Tweet model 的字段, 需要显式声明, 否则 Serializer 不知道如何处理
+    files = serializers.ListField(
+        child=serializers.FileField(),
+        allow_empty=True,   # {'files': [list]} 检查 val: [list]  是否为空
+        required=False,     # {'files': [list]} 检查 key: 'files' 是否存在
+    )
+
+    class Meta:
+        model = Tweet
+        fields = ('content', 'files')
+
+    def create(self, validated_data):
+        1)❗Meta.fields 是白名单, 只有声明的字段 {'content':, 'files':,} 才会被验证并进入 validated_data
+           客户端传入的其他字段一律忽略，防止恶意篡改
+
+        2) 但可以从任何地方取额外数据, 不受 fields 限制
+           user = self.context['request'].user   # ← 来自 context，不受 fields 限制
+           extra = SomeOtherModel.objects.get()  # ← 随便查数据库
+
+
+class CommentSerializerForUpdate(serializers.ModelSerializer):
+    # 反序列化 (Update): 只允许修改 content, 防止客户端篡改 user / tweet / created_at 等不可变字段
+    class Meta:
+        model = Comment
+        fields = ('content',)   # 明确可更新字段白名单
+
+
+============================================================
+4. 多 Serializer 场景: 不同的需求，用不同的 Serializer
+============================================================
+1) 安全性: 按场景控制返回字段，避免敏感字段意外暴露
+2) 解耦: 读写职责分离；各 Serializer 独立，互不影响
+3) 性能: 按需序列化，mini 场景避免加载重字段 (如 comments)
+4) 扩展性: 便于同时支持不同存储后端 (MySQL / HBase)
+
+示例 1
+GET /api/tweets/1/?format=with_comments
+GET /api/tweets/1/?format=mini
+
+class TweetViewSet(ListModelMixin, viewsets.GenericViewSet):
+    def get_serializer_class(self):
+        format = self.request.query_params.get('format', 'default')
+        if format == 'with_comments': return TweetSerializerWithComment
+        if format == 'mini':          return TweetSerializerMini
+        ...
+        return TweetSerializer
+
+    def list(self, request, *args, **kwargs):
+        tweets = self.get_queryset()
+        serializer = self.get_serializer(tweets, many=True)
+        # serializer_class = self.get_serializer_class()
+        # serializer = serializer_class(instance=tweets, many=True)
+        return Response({'tweets': serializer.data})
+
+---------------------------------------------------------------
+
+示例 2: friendships.api.serializers
+
+    读 (Response):
+      BaseFriendshipSerializer   定义允许暴露的字段，不负责写操作
+      ├── FollowerSerializer     粉丝列表展示
+      └── FollowingSerializer    关注列表展示
+
+    写 (Request):
+      FriendshipSerializerForCreate  负责 create
+      FriendshipSerializerForUpdate  负责 update

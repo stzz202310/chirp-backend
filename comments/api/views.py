@@ -16,51 +16,35 @@ from utils.permissions import IsObjectOwner, IsCommentOwnerOrTweetOwner
 
 
 class CommentViewSet(viewsets.GenericViewSet):
-    """""""""
+    """
     只实现 list, create, update, destroy 的方法
     不实现 retrieve (查询单个 comment) 的方法，因为没有这个需求
     """
-    # DRF界面: 基于 {serializer_class} 展示|渲染 表单
-    # queryset:     def get_object(self)      OR queryset = XXX
-    # permissions:  def get_permissions(self) OR permission_classes = (XXX,)
     serializer_class = CommentSerializerForCreate
     queryset = Comment.objects.all()
     filterset_fields = ('tweet_id',)
 
     def get_permissions(self):
-    # 需要实例化权限类，例如 AllowAny() 或 IsAuthenticated()
-    # 不能写成 AllowAny 或 IsAuthenticated（那只是类名，而不是权限实例）
+        # 必须返回一个 list, 里面是 权限类的实例  ✅ [AllowAny()]
+        # 不能直接返回类名, 这只是类本身          ❌ [AllowAny]
         if self.action == 'create':
             return [IsAuthenticated()]
         if self.action == 'update':
-            # 1. 检查 是否登陆
-            # 2. 检查 IsObjectOwner() [只允许 {评论作者：comment.user} 修改评论]
+            # 1. 检查 IsAuthenticated() [是否登陆]
+            # 2. 检查 IsObjectOwner() [只允许 {评论作者: comment.user} 修改评论]
             return [IsAuthenticated(), IsObjectOwner()]
         if self.action == 'destroy':
             # 2. 检查 IsCommentOwnerOrTweetOwner()
-            # 允许 {评论作者：comment.user} {推特作者：comment.tweet.user} 删除评论
+            #    允许 {评论作者：comment.user} {推特作者：comment.tweet.user} 删除评论
             return [IsAuthenticated(), IsCommentOwnerOrTweetOwner()]
         return [AllowAny()]
 
-    @required_params(method='GET', params=['tweet_id']) # 检测是否有 tweet_id, 否则会返回所有的评论
+    @required_params(method='GET', params=['tweet_id']) # ⚠️ 检测是否有 tweet_id, 否则会返回所有的评论
     @method_decorator(ratelimit(key='user', rate='3/min', method='GET', block=True))
-    # required_params:  访问 webserver 机器内存, 更快 节省了 round trip time
-    # method_decorator: 访问 memcached 机器内存
-    # required_params => method_decorator => list [重量级: 轻 => 较轻 => 重(DB)]
-    # TODO [HARD]: 有权限看tweet的用户,才有权限看这个tweet的评论
+    # TODO [Homework] 有权限看这个tweet的用户, 才有权限看这个tweet的评论
     def list(self, request, *args, **kwargs):
-        # tweet_id = request.query_params.get('tweet_id')
-        # comments = Comment.objects.filter(tweet_id=tweet_id)
         queryset = self.get_queryset()
-
-        # ✅ queryset.prefetch_related [2 queries]
-        # ❌ queryset.select_related   [join]
-        # ❌ queryset                  [n + 1 queries]
-        # user = Serializer(source='cached_user') 展示 users [many=True] 的详细信息
-        # source='cached_user' 可以从缓存读取 user, 所以不加 prefetch_related 也行
-        comments = self.filter_queryset(queryset=queryset)\
-            .prefetch_related('user')\
-            .order_by('created_at')
+        comments = self.filter_queryset(queryset=queryset).order_by('created_at')
 
         serializer = CommentSerializer(
             instance=comments,
@@ -74,6 +58,7 @@ class CommentViewSet(viewsets.GenericViewSet):
 
     @method_decorator(ratelimit(key='user', rate='3/s', method='POST', block=True))
     def create(self, request, *args, **kwargs):
+        # create 权限为 IsAuthenticated 用户已登录, 因此直接使用 request.user.id, 无需额外校验
         data = {
             'user_id': request.user.id,
             'tweet_id': request.data.get('tweet_id'),
@@ -99,34 +84,21 @@ class CommentViewSet(viewsets.GenericViewSet):
 
     @method_decorator(ratelimit(key='user', rate='3/s', method='POST', block=True))
     def update(self, request, *args, **kwargs):
-        # get_object 是 DRF 包装的一个函数，会在找不到的时候 raise 404 error
-        # 所以这里不需要做额外的判断
         comment = self.get_object()
-        serializer = CommentSerializerForUpdate(
-            instance=comment,
-            data=request.data,
-        )
+        serializer = CommentSerializerForUpdate(instance=comment, data=request.data)
 
         if not serializer.is_valid():
-            return Response(
-                data={'message': 'Please check input.',},
-                status=status.HTTP_400_BAD_REQUEST)
-        # save() 方法会触发 serializer 中的 update 方法，点进 save 的具体实现里可以看到
-        # save() 会根据是否传入 instance 来决定执行 create() 还是 update()
+            return Response(data={
+                'message': 'Please check input.',
+                'errors': serializer.errors,
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         comment = serializer.save()
-        serializer = CommentSerializer(
-            instance=comment,
-            context={'request': request},
-        )
-        return Response(
-            data=serializer.data,
-            status=status.HTTP_200_OK,
-        )
+        serializer = CommentSerializer(instance=comment, context={'request': request})
+        return Response(data=serializer.data, status=status.HTTP_200_OK)
 
     @method_decorator(ratelimit(key='user', rate='5/s', method='POST', block=True))
     def destroy(self, request, *args, **kwargs):
         comment = self.get_object()
         comment.delete()
-        # DRF 里默认 destroy 返回的是 status=status.HTTP_204_NO_CONTENT
-        # 这里 return 了 success=True 更直观的让前端去做判断，所以 return 200 更合适
         return Response(data={'success': True}, status=status.HTTP_200_OK)

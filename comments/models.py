@@ -11,8 +11,9 @@ from utils.memcached_helper import MemcachedHelper
 
 class Comment(models.Model):
     """
-    这个版本中，我们先实现一个比较简单的评论
-    评论只评论在某个Tweet上, 不能评论别人的评论
+    本版本实现基础评论功能:
+    - 评论仅可针对某条 Tweet 发布
+    - 不支持对其他评论进行回复 (禁止多级评论)
     """
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     tweet = models.ForeignKey(Tweet, on_delete=models.SET_NULL, null=True)
@@ -21,7 +22,7 @@ class Comment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # 需求: 在某个 Tweet 下排序所有 comments [comment.like_set]
+        # 需求: 在某个 Tweet 下排序所有 comments
         index_together = (('tweet', 'created_at'),)
 
     def __str__(self):
@@ -35,7 +36,7 @@ class Comment(models.Model):
     @property
     def like_set(self):
         return Like.objects.filter(
-            content_type=ContentType.objects.get_for_model(Comment),
+            content_type=ContentType.objects.get_for_model(model=Comment),
             object_id=self.id,
         ).order_by('-created_at')
 

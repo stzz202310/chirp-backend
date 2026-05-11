@@ -3,14 +3,13 @@ from django.conf import settings
 
 
 class RedisClient:
-    conn = None # 整个类 全局共享 coon
+    conn = None
+    # 类属性 conn: 所有实例共享同一个连接(全局共享), 避免重复创建 Redis 连接
+    # 一个 request 的生命周期 可能会执行 10 次 Redis GET + 10 次 Redis SET
+    # 因此, 1 个 request 应复用 1 个 Redis connection
 
-    # request ==> web server [1 process] ==> response
-    # 1 request 可能等于 10 x redis get 加 10 x redis set
-    # 1 request 只建立一个 connection，不要建立多个 connections
     @classmethod
     def get_connection(cls):
-        # 使用 singleton 模式，全局只创建一个 connection
         if cls.conn:    # if RedisClient.conn:
             return cls.conn
         cls.conn = redis.Redis(
@@ -26,4 +25,4 @@ class RedisClient:
         if not settings.TESTING:
             raise Exception("You can not flush redis in production environment")
         conn = cls.get_connection()
-        conn.flushdb()  # 类似于 caches['testing'].clear()
+        conn.flushdb()  # ⚠️ 测试环境: Redis/Gatekeeper/Celery 的数据都会被清空

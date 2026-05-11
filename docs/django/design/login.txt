@@ -1,0 +1,60 @@
+
+request = {
+    "是谁发来的？"         → request.user
+    "带来了什么数据？"      → request.data
+    "URL 参数是什么？"     → request.query_params
+    "是否已登录？"         → request.user.is_authenticated
+}
+
+原生 Django：
+- POST 参数 → request.POST
+- GET  参数 → request.GET
+
+Django REST Framework：
+- POST → request.data        （HTTP Body 中）
+- GET  → request.query_params（URL末尾的问号之后）
+
+=======================================================================================
+
+A. 在调用 django_login 之前:
+- request.user = AnonymousUser
+- request.user.is_authenticated = AnonymousUser.is_authenticated → 永远 False
+- request.data = 客户端发送的用户名和密码（未校验）
+
+
+B. user = authenticate(request, username=username, password=password)
+   1. 接收 request(可选) 和 用户名/密码
+   2. 查找数据库中的用户记录
+   3. 对比用户密码（Django 存的是哈希值，进行哈希验证）
+   4. 如果用户名和密码匹配 → 返回一个 user 对象
+      如果不匹配 → 返回 None
+      if not user or user.is_anonymous: 登录失败
+
+
+C. django_login(request, user)
+   1. 获取或创建 request.session
+   2. 在 session 中写入用户 id (通常是 request.session['_auth_user_id'] = user.id)
+   3. 设置 request.user = user (仅对当前请求生效, 方便当前请求访问)
+      request.user.is_authenticated = user.is_authenticated → 永远 True
+   4. 更新最后登录时间等用户状态 (可选)
+   5. 生成一个 session cookie (默认名为 sessionid)，放到 response 中返回给客户端
+      - request.user = user     → 只影响当前请求
+      - session + cookie        → 决定后续请求的登录状态
+
+
+D. django_logout(request)
+   1. 清空 request.session
+   2. 删除服务器中的 session 数据
+   3. request.user 重新变为 AnonymousUser
+   4. 浏览器中的 session cookie 失效
+
+
+E. 服务器内部: Session table 里增加/更新一行数据，例如：
+| session_key | session_data    | expire_date |
+| ----------  | --------------- | ----------- |
+| abcd12358   | {"user_id": 43} | 2025-11-10  |
+
+Response 返回: Set-Cookie: sessionid=abcd12358; Path=/; HttpOnly
+
+浏览器保存 sessionid, 在未过期前的后续请求中自动携带 Cookie: sessionid=abcd12358
+Django 根据 sessionid 查找 session, 恢复 request.user，实现"自动登录"

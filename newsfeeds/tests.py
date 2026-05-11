@@ -18,13 +18,12 @@ class NewsFeedServiceTests(TestCase):
             tweet = self.create_tweet(user=self.zhuzhu)
             newsfeed = self.create_newsfeed(user=self.taotao, tweet=tweet)
             newsfeed_timestamps.append(newsfeed.created_at)
+            self.assertIn(newsfeed.created_at, [tweet.created_at, tweet.timestamp])
         newsfeed_timestamps = newsfeed_timestamps[::-1]
 
         # 1. cache miss
-        # TODO [Myself]: 增加测试，检查 cache hit rate
         self.clear_cache()
         newsfeeds = NewsFeedService.get_cached_newsfeeds(user_id=self.taotao.id)
-        # HBase 没有自增 ID，所以测试验证用 created_at 代替 id
         self.assertEqual([f.created_at for f in newsfeeds], newsfeed_timestamps)
 
         # 2. cache hit
@@ -43,8 +42,7 @@ class NewsFeedServiceTests(TestCase):
         newsfeed1 = self.create_newsfeed(user=self.taotao, tweet=tweet1)
 
         # 1. cache miss
-        # ❌ RedisClient.clear(): 会清空 Redis，包括 gatekeeper 数据
-        #    清理后必须重新初始化 gatekeeper
+        # ❌ RedisClient.clear() 测试环境: Redis/Gatekeeper/Celery 的数据都会被清空
         self.clear_cache()
         conn = RedisClient.get_connection()
         key = USER_NEWSFEEDS_PATTERN.format(user_id=self.taotao.id)

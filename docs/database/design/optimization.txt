@@ -1,0 +1,200 @@
+
+============================================================
+注意事项
+============================================================
+
+1) 避免使用 JOIN
+   a. JOIN 本身并不快: Web 后端要求秒级响应
+   b. JOIN 必须在同一 MySQL 实例内执行 [同一个 MySQL 进程, 同一台物理机器上]
+      分库分表(Sharding)场景下:
+        shard_1：运行 MySQL 实例 #1 (存 user 表)
+        shard_2：运行 MySQL 实例 #2 (存 friendship 表)
+        它们是两个不同的实例 (不同进程、不同机器), JOIN 失效
+
+   示例：friendships.services | comments.api.views
+        - ❌ select_related   (JOIN 查询)
+        - ✅ prefetch_related (分批查询)
+
+2) 避免使用 CASCADE 删除
+   https://docs.djangoproject.com/en/3.1/ref/models/querysets/#delete
+   删除一个用户 → 删除这个用户发的帖子 → 删除帖子的赞和评论 → 删除评论的赞 ...
+
+3) DROP FOREIGN KEY CONSTRAINT TODO [Homework]
+
+4) 联合索引
+   Table.objects.filter(...).filter(...)
+   - Django 会把多个 filter 整合为一条 SQL 查询
+   - ⚠️如果有多个筛选条件，必须检查数据库是否存在对应的联合索引
+
+5) 取长度
+   queryset = Tweet.objects.filter(...)[:21] ⚠️ lazy load
+   A. if len(queryset) == 21:     ✅ 已经执行了 SQL 查询获取数据; 直接在 Python 中判断长度, 无额外 SQL
+   B. if queryset.count() == 21:  ❌ 会额外执行一条 SQL 查询: SELECT COUNT(*) FROM `tweets_tweet` WHERE ...
+
+
+============================================================
+Reduce Round Trip
+============================================================
+💡核心思想: 减少客户端与数据库/缓存之间的往返次数 (Round Trip Time)
+
+web (client) <==> db | redis | memcached (server)
+
+- 每次通信（round trip）时间 = 10ms
+- 每条 SQL 操作时间 = 1ms
+
+❌ 通信十次, 每次插入一条数据 = (10ms + 1ms) * 10 = 110 ms   N+1 Queries
+✅ 通信一次, 每次插入十条数据 = 10ms + 1ms * 10 = 20ms
+
+❌for 循环 {Query 多次查找}, ✅prefetch_related
+❌for 循环 {Query 多次插入}, ✅bulk_create
+❌for 循环 {redis 多次插入}, ✅conn.rpush(key, *serialized_list)
+❌for 循环 {cache.get(key)},✅memcached.get_many([keys])
+
+-----------------------------------------------------------------------------------------------
+
+1️⃣ comments.api.views
+@required_params(method='GET', params=['tweet_id'])
+@method_decorator(ratelimit(key='user', rate='3/min', method='GET', block=True))
+def list(self, request, *args, **kwargs): ...
+
+@required_params():  只访问当前 web server 机器内存, 最快 [可以提前拦截非法请求，节省后续 Round Trip Time]
+@method_decorator(): 通常会访问 memcached 等缓存服务器
+def list():          可能访问数据库, 最慢
+
+推荐执行顺序(从轻到重): required_params → method_decorator → 视图逻辑(数据库)
+
+-----------------------------------------------------------------------------------------------
+
+2️⃣ comments.api.views / tweets.api.views
+comments = self.filter_queryset(queryset=queryset).prefetch_related('user')
+
+class CommentSerializer(serializers.ModelSerializer):
+    user = UserSerializerForComment(source='cached_user')
+
+方案 A: 不用 cached_user: user = UserSerializerForComment()
+    ❌ queryset                   N + 1 queries = 1 条查 comments + N 条查 user
+    ❌ queryset.select_related    SQL JOIN
+    ✅ queryset.prefetch_related  2 条 SQL = 1 条查 comments + 1 条查 users(IN 查询)
+       SELECT * FROM comments_comment WHERE tweet_id = 1 ORDER BY created_at ASC;
+       SELECT * FROM auth_user WHERE id IN (5, 8, 12, 20, 33, 41, 52, 60, 77, 81);
+       Django 自动收集所有 user_id, 然后 Django 在内存里做映射: comment.user = already_fetched_user
+
+方案 B: 不 prefetch_related + 用 cached_user (课程方案)
+    N 次 cache round trip
+    可能比 2 条 SQL 还慢
+
+方案 C: 批量 cache + IN 查询补 miss
+    1. 收集 user_ids
+    2. cache.get_many
+    3. 找 miss
+    4. SQL IN 查询 miss
+    5. cache.set_many
+
+
+1 个 tweet, 10 个不同 user 发了 10 条 comment
+        all hit     all miss            half half
+方案 A   2 SQL       2 SQL               2 SQL
+方案 B   10 cache    10 cache + 10 SQL   10 cache + 5 SQL        1 hit = 1 cache, 1 miss = 1 cache + 1 SQL
+方案 C   1 cache     1 cache + 1 SQL     1 cache + 1 SQL
+
+-----------------------------------------------------------------------------------------------
+
+3️⃣ inbox.api.views
+
+def mark_all_as_read(self, request, *args, **kwargs):
+    updated_count = self.get_queryset().filter(unread=True).update(unread=False) ...
+
+1) .filter(unread=True) 只更新必要的数据, 而不是对当前用户的所有通知执行 update
+
+2) 避免 N + 1 queries
+   for notification in self.get_queryset().filter(unread=True):
+       notification.unread = False
+       notification.save()
+
+3) 索引设计
+   class AbstractNotification(models.Model):
+       unread = models.BooleanField(default=True, blank=False, db_index=True)
+       ❌ 单独给 unread 建索引意义不大
+       1. unread 只有 True / False 两个值，区分度很低
+       2. 存储开销[多一个索引 多一张表单], 写入成本[INSERT|UPDATE 需要维护索引]
+
+       class Meta:
+           index_together = ('recipient', 'unread')
+           ✅.filter(recipient=self.request.user).filter(unread=True)
+
+-----------------------------------------------------------------------------------------------
+
+4️⃣ friendships.services
+
+def get_followers(cls, user):
+
+1. ❌ 错误的写法一 (N + 1 Queries)
+   1 Query: filter 出所有 friendships
+   N Query: for 循环每个 friendship 取 from_user
+
+   friendships = Friendship.objects.filter(to_user=user)
+   return [friendship.from_user for friendship in friendships]
+
+
+2. ❌ 错误的写法二 (JOIN)
+   friendships = Friendship.objects.filter(to_user=user).select_related('from_user')
+   return [friendship.from_user for friendship in friendships]
+
+   SELECT * FROM `friendships_friendship`
+   INNER JOIN `auth_user`
+   ON "friendships_friendship"."from_user_id" = "auth_user"."id"
+   WHERE friendships_friendship"."to_user_id" = <user.id>;
+
+
+3. ✅ 正确的写法一
+   friendships = Friendship.objects.filter(to_user=user)
+   follower_ids = [friendship.from_user_id for friendship in friendships]
+   followers = User.objects.filter(id__in=follower_ids)
+
+
+4. ✅ 正确的写法二 (prefetch_related) = #3
+   1) 实际执行的 SQL (共 2 条)
+      SELECT * FROM `friendships_friendship` WHERE `friendships_friendship`.`to_user_id` = <user.id>;
+      SELECT * FROM `auth_user` WHERE `auth_user`.`id` IN <follower_ids>;
+
+   2) 执行时机 (懒加载)
+      friendships = Friendship.objects.filter(to_user=user).prefetch_related('from_user')
+      ↑ 此时不发任何 SQL, 仅在 QuerySet 上标记 prefetch 意图
+
+      list(friendships) / for f in friendships / ...
+      ↑ 真正迭代时触发: 先执行 SQL 1, 再执行 SQL 2, 最后在内存中完成关联
+
+   3) 执行后
+      Django 在内存中构建映射:
+      { from_user_id_1: <User instance>,
+        from_user_id_2: <User instance>, ... }
+      此后访问任意 friendship.from_user 均直接读取缓存, 不再发 SQL
+      ⚠️ 缓存挂载在当前 QuerySet 实例上, QuerySet 销毁后缓存随之失效
+
+
+5. ✅ 正确的写法三: 直接用 user_id instead of user
+   def get_follower_user_id_list(cls, to_user_id)
+
+-----------------------------------------------------------------------------------------------
+
+5️⃣ utils.redis_helper
+
+   conn.rpush(key, 1)           [1]
+   conn.rpush(key, 2)           [1, 2]
+   conn.rpush(key, 3)           [1, 2, 3]   ❌ [N]rpush: [N]次网络请求
+   conn.rpush(key, 1, 2, 3)     [1, 2, 3]   ✅ [1]rpush: [1]次网络请求
+   conn.lpush(key, *[1, 2, 3])  [3, 2, 1]   *serialized_list: 将 list 展开为多个参数，批量写入
+
+-----------------------------------------------------------------------------------------------
+
+6️⃣ newsfeeds.services
+
+1. ❌ 错误的写法 (for loop: 多次写入一行)
+   for follower_id in follower_ids: NewsFeed.objects.create(user_id=follower_id, tweet_id=tweet_id)
+   INSERT INTO `newsfeeds_newsfeed` (`user_id`, `tweet_id`, `created_at`) VALUES (1, 2, '...')
+   INSERT INTO `newsfeeds_newsfeed` (`user_id`, `tweet_id`, `created_at`) VALUES (2, 2, '...')
+   INSERT INTO `newsfeeds_newsfeed` (`user_id`, `tweet_id`, `created_at`) VALUES (3, 2, '...')
+
+2. ✅ 正确的方法 (bulk_create: 一次写入多行)
+   INSERT INTO `newsfeeds_newsfeed` (`user_id`, `tweet_id`, `created_at`)
+   VALUES (1, 2, '...'), (2, 2, '...'), (3, 2, '...')

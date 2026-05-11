@@ -28,10 +28,6 @@ class FriendshipServiceTests(TestCase):
 
 
 class HBaseTests(TestCase):
-    # def setUp(self):
-    #     super(HBaseTests, self).setUp()
-    # def tearDown(self):
-    #     super(HBaseTests, self).tearDown()
 
     @property
     def ts_now(self):
@@ -43,8 +39,6 @@ class HBaseTests(TestCase):
         following.save()
 
         instance = HBaseFollowing.get(from_user_id=123, created_at=timestamp)
-        # 如何查询 用户123 是否关注了 用户34?
-        # 答: 用户34 in [用户123 所有的关注用户], cache 优化
         self.assertEqual(instance.from_user_id, 123)
         self.assertEqual(instance.to_user_id, 34)
         self.assertEqual(instance.created_at, timestamp)
@@ -79,14 +73,15 @@ class HBaseTests(TestCase):
             self.assertEqual(str(e), 'created_at is missing in row key.')
         self.assertTrue(exception_raised, True)
 
+        # 3. create and get
         ts = self.ts_now
         HBaseFollower.create(from_user_id=1, to_user_id=2, created_at=ts)
-        instance = HBaseFollower.get(to_user_id=2,  created_at=ts)
+        instance = HBaseFollower.get(to_user_id=2, created_at=ts)
         self.assertEqual(instance.from_user_id, 1)
         self.assertEqual(instance.to_user_id, 2)
         self.assertEqual(instance.created_at, ts)
 
-        # 3. can not get if row key is missing
+        # 4. can not get if row key is missing
         try:
             HBaseFollower.get(to_user_id=2)
             exception_raised = False

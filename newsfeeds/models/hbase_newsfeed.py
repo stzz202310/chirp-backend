@@ -6,9 +6,6 @@ from utils.memcached_helper import MemcachedHelper
 
 
 class HBaseNewsFeed(models.HBaseModel):
-    # user: 不是存储谁发了这条 tweet，而是谁可以看到这条 tweet
-    # user follow 了 tweet 的发帖人，所以 user 的新鲜事列表有这个帖子
-    # user 一般是 request.user, 不需要读取缓存
     user_id = models.IntegerField(reverse=True)
     created_at = models.TimestampField()
     tweet_id = models.IntegerField(column_family='cf')

@@ -1,3 +1,0 @@
-1   admin   admin   admin@zhuzhu.com
-2   taotao  taotao  taotao@zhuzhu.com
-3   zhuzhu  zhuzhu  zhuzhu@zhuzhu.com

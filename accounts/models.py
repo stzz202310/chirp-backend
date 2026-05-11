@@ -7,13 +7,8 @@ from utils.listeners import invalidate_object_cache
 
 
 class UserProfile(models.Model):
-    # OneToOneField 会创建一个 unique index, 确保不会有多个 UserProfile 指向同一个 User
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True)
-    # Django 还有一个 ImageField，但是尽量不要用，会有很多的其他问题，用 FileField 可以起到同样的效果
-    # 因为最后我们都是以文件形式存储起来，使用的是文件的 url 进行访问
     avatar = models.FileField(null=True)
-    # 当一个 user 被创建之后，会创建一个 user profile 的 object
-    # 此时用户还来不及去设置 nickname 等信息，因此设置 null=True
     nickname = models.CharField(max_length=200, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -22,47 +17,15 @@ class UserProfile(models.Model):
         return '{} {}'.format(self.user, self.nickname)
 
 
-"""
-定义一个 profile 的 property 方法，植入到 User 这个 model 里
-这样当我们通过 user 的一个实例化对象访问 profile 的时候 [user_instance.profile]
-就会在 UserProfile 中进行 get_or_create 来获得对应的 profile 的 object
-这种写法实际上是一个利用 Python 的灵活性进行 hack 的方法，这样会方便我们通过 user
-快速访问到对应的 profile 信息。
-"""
 def get_profile(user):
-    # models: 最底层，尽量不要有其他依赖 [views, serializers, services 都会依赖 models]
-    # import 放在函数里面避免循环依赖
     from accounts.services import UserService
     if hasattr(user, '_cached_user_profile'):
         # return user._cached_user_profile
         return getattr(user, '_cached_user_profile')
-    # get_or_create: 之前的用户 可能没有 profile 属性
     profile = UserService.get_profile_through_cache(user_id=user.id)
-    # 使用 user 对象的属性进行缓存(cache), 避免多次调用同一个 user 的 profile 时
-    # 重复的对数据库进行查询
     setattr(user, '_cached_user_profile', profile)
     return profile
 
-"""
-User Model 是 django 自带的库, 无法直接编辑
-方法 1: instance level 的 cache [instance.__dict__]
-通过 User.profile = property(get_profile) 
-给 User 增加了 user.profile 的 property 属性 用于快捷访问, 类似于
-class User:
-    @property
-    def profile(self):
-
-方法 2:
-class UserService:
-    @classmethod
-    def get_profile(cls, user):
-        return UserProfile.objects.get(user=user)
-profile = UserService.get_profile(user=user)
-
-
-Python 在解释执行模块（.py 文件）时，从上到下运行代码
-遇到 User.profile = property(get_profile) 就会立即执行
-"""
 User.profile = property(get_profile)
 
 

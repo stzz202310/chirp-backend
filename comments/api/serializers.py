@@ -8,14 +8,10 @@ from tweets.models import Tweet
 
 
 class CommentSerializer(serializers.ModelSerializer):
-    # 可以通过 source=xxx 指定去访问 model instance 的 xxx property
-    # 即 model_instance.xxx [comment_instance.cached_user] 来获得数据
-    # https://www.django-rest-framework.org/api-guide/serializers/#specifying-fields-explicitly
     user = UserSerializerForComment(source='cached_user')
-    # has_liked: 当前登陆用户request.user 是否赞过这个 comment
+    # has_liked: 当前登陆用户 request.user 是否赞过这个 comment
     has_liked = serializers.SerializerMethodField()
     likes_count = serializers.SerializerMethodField()
-    # likes = LikeSerializer(source='like_set', many=True)
 
     class Meta:
         model = Comment
@@ -42,8 +38,8 @@ class CommentSerializer(serializers.ModelSerializer):
 
 
 class CommentSerializerForCreate(serializers.ModelSerializer):
-    # 这两项必须手动添加
-    # 因为默认 ModelSerializer 里只会自动包含 user 和 tweet 而不是 user_id 和 tweet_id
+    # 需要手动添加 tweet_id 和 user_id
+    # 因为 ModelSerializer 默认只会包含模型字段 (tweet, user)
     tweet_id = serializers.IntegerField()
     user_id = serializers.IntegerField()
 
@@ -52,22 +48,17 @@ class CommentSerializerForCreate(serializers.ModelSerializer):
         fields = ('content', 'tweet_id', 'user_id',)
 
     def validate(self, attrs):
-        tweet_id = attrs.get('tweet_id')
+        tweet_id = attrs['tweet_id']
         if not Tweet.objects.filter(id=tweet_id).exists():
             raise ValidationError({'message': 'Tweet does not exist.'})
-        # 'user_id': request.user.id, 所以不用再检查
-
-        # 必须 return validated data
-        # 也就是验证过之后，进行过处理的输入数据 [当然，也可以是不做处理的数据]
         return attrs
 
 class CommentSerializerForUpdate(serializers.ModelSerializer):
     class Meta:
         model = Comment
-        fields = ('content',)   # update: 只能修改 content
+        fields = ('content',)
 
     def update(self, instance, validated_data):
         instance.content = validated_data.get('content')
         instance.save()
-        # update 方法要求 return 修改后的 instance 作为返回值
         return instance

@@ -28,6 +28,7 @@ A practice project: implementing a simplified **Twitter backend** with **Django*
    ```bash
    cd /vagrant/
    mysql -u root -pzhuzhu    # Start MySQL interactive shell
+   
    cd /vagrant/hbase-2.4.4/
    ./bin/hbase shell         # Start HBase interactive shell
 

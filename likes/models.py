@@ -9,34 +9,23 @@ from utils.memcached_helper import MemcachedHelper
 
 
 class Like(models.Model):
-    # https://docs.djangoproject.com/en/3.1/ref/contrib/contenttypes/#generic-relations
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    # {user} liked {content_object: content_type + object_id} at {created_at}
-    object_id = models.PositiveIntegerField()   # comment id OR tweet id
-    # user twitter; show tables; SELECT * FROM `django_content_type`;
-    # id    app_label   model
-    # 1     admin       logentry
-    # 7     tweets      tweet
-    # 8     friendships friendship ...
-    content_type = models.ForeignKey(   # 选哪个表单(model): tweet OR comment
-        ContentType,
-        on_delete=models.SET_NULL,
-        null=True,
-    )
+
+    object_id = models.PositiveIntegerField()
+    content_type = models.ForeignKey(ContentType, on_delete=models.SET_NULL, null=True)
     content_object = GenericForeignKey(ct_field='content_type', fk_field='object_id')
-    # content_object: 并没有实际的保存在表单之中; 可以当作是一个快捷的访问方式
-    # like.content_object: 具体的 tweet 或 comment
+    # content_object: 不会实际存储在数据库表中, 是 GenericForeignKey 提供的快捷访问属性
+    # like.content_object: 返回具体关联的对象 (Tweet实例 或 Comment实例)
 
     class Meta:
-        # 这里使用 unique together 会建一个 <user, content_type, object_id> 的索引
-        # 这个索引同时还可以具备查询某个 user like 了哪些不同的 objects 的功能
-        # 因此如果 unique together 改成 <content_type, object_id, user> 就没有这样的效果了
+        # 1. 保证同一个 user 不能对同一个对象重复点赞
+        # 2. 查询某个 user 点赞过哪些 objects
+        # unique_together = index_together + unique 约束
         unique_together = (('user', 'content_type', 'object_id'),)
 
-        # 这个 index 的作用是可以按照时间顺序排序 {content_object: content_type + object_id} 的所有likes
-        # 1. 某个 tweet | comment 所有 [按照时间排序] 的likes
-        # 2. 某个 user 给哪些 tweet | comment [按照时间排序] 点过赞
+        # 1. 查询某个 Tweet / Comment 的所有 likes,      并按照 created_at 时间排序
+        # 2. 查询某个 user 给哪些 Tweet / Comment 点过赞, 并按照 created_at 时间排序
         index_together = (
             ('content_type', 'object_id', 'created_at'),
             ('user', 'content_type', 'created_at'),
@@ -55,9 +44,11 @@ class Like(models.Model):
         return MemcachedHelper.get_object_through_cache(
             model_class=User,
             object_id=self.user_id,
-            # 千万不要 self.user.id: 会产生数据库的查询，白缓存了
+            # ⚠️ self.user.id 会触发 ORM 查询, 会额外访问数据库，失去缓存意义
         )
 
-
+# ⚠️ 点赞后执行
+# 1. 数据更新   Like 表单, incr_likes_count[Tweet 表单, Redis]
+# 2. 发送通知   api.views.create() 中调用 send_like_notification
 pre_delete.connect(receiver=decr_likes_count, sender=Like)
 post_save.connect(receiver=incr_likes_count, sender=Like)

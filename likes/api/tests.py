@@ -30,7 +30,7 @@ class LikeApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
         # 3. wrong content_type
-        response = self.taotao_client.post(LIKE_BASE_URL, data={
+        response = self.taotao_client.post(path=LIKE_BASE_URL, data={
             'content_type': 'tweet_wrong',
             'object_id': tweet.id,
         })
@@ -46,7 +46,7 @@ class LikeApiTests(TestCase):
         self.assertEqual('object_id' in response.data['errors'], True)
 
         # 5. post success
-        response = self.taotao_client.post(LIKE_BASE_URL, data)
+        response = self.taotao_client.post(path=LIKE_BASE_URL, data=data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(tweet.like_set.count(), 1)
 
@@ -71,7 +71,7 @@ class LikeApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
         # 3. wrong content_type
-        response = self.taotao_client.post(LIKE_BASE_URL, data={
+        response = self.taotao_client.post(path=LIKE_BASE_URL, data={
             'content_type': 'comment_wrong',
             'object_id': comment.id,
         })
@@ -133,14 +133,16 @@ class LikeApiTests(TestCase):
         # 5. zhuzhu has not liked COMMENT before
         response = self.zhuzhu_client.post(LIKE_CANCEL_URL, data=like_comment_data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['deleted'], False)   # 0, 1
+        self.assertEqual(response.data['deleted'], False)
+        self.assertEqual(response.data['rows_count'].get('likes.Like', 0), 0)
         self.assertEqual(tweet.like_set.count(), 1)
         self.assertEqual(comment.like_set.count(), 1)
 
-        # 6. taotao successfully canceled COMMENT
+        # 6. taotao successfully canceled COMMENT's like
         response = self.taotao_client.post(LIKE_CANCEL_URL, data=like_comment_data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['deleted'], True)
+        self.assertEqual(response.data['rows_count'].get('likes.Like', 0), 1)
         self.assertEqual(tweet.like_set.count(), 1)
         self.assertEqual(comment.like_set.count(), 0)
 
@@ -148,13 +150,15 @@ class LikeApiTests(TestCase):
         response = self.taotao_client.post(LIKE_CANCEL_URL, data=like_tweet_data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['deleted'], False)
+        self.assertEqual(response.data['rows_count'].get('likes.Like'), None)
         self.assertEqual(tweet.like_set.count(), 1)
         self.assertEqual(comment.like_set.count(), 0)
 
-        # 8. zhuzhu successfully canceled TWEET
+        # 8. zhuzhu successfully canceled TWEET's like
         response = self.zhuzhu_client.post(LIKE_CANCEL_URL, data=like_tweet_data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['deleted'], True)
+        self.assertEqual(response.data['rows_count'].get('likes.Like'), 1)
         self.assertEqual(tweet.like_set.count(), 0)
         self.assertEqual(comment.like_set.count(), 0)
 
@@ -213,7 +217,7 @@ class LikeApiTests(TestCase):
 
         # 3. test NEWSFEED_LIST_API
         self.create_like(user=self.taotao, target=tweet)
-        self.create_newsfeed(self.zhuzhu, tweet)
+        self.create_newsfeed(user=self.zhuzhu, tweet=tweet)
         response = self.zhuzhu_client.get(NEWSFEED_LIST_API)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['results'][0]['tweet']['has_liked'], True)
@@ -231,33 +235,6 @@ class LikeApiTests(TestCase):
         tweet = self.create_tweet(user=self.taotao)
         data = {'content_type': 'tweet', 'object_id': tweet.id}
         tweet_url = TWEET_DETAIL_API.format(tweet.id)
-
-        """
-        Django ORM 每次查询都会新建一个模型实例, 所以 tweet1、tweet2 是两个独立实例
-        
-        数据库 (source of truth)
-           ↑        ↑
-         tweet1   tweet2   (两个 Python 副本)
-        1. save() → 写数据库
-        2. refresh_from_db() → 从数据库拉数据
-        3. ORM 不做对象之间的同步
-        
-        tweet1.refresh_from_db() 的本质: 用数据库当前状态，重新填充 tweet1 这个对象的字段
-        1. 只更新当前实例的属性
-        2. 不会广播、不知道 tweet2 的存在
-        """
-        # from tweets.models import Tweet
-        # tweet1 = Tweet.objects.get(id=tweet.id)
-        # tweet2 = Tweet.objects.get(id=tweet.id)
-        # print(tweet1 == tweet2)  # ✅ True  (同一条记录)
-        # print(tweet1 is tweet2)  # ❌ False (不是同一个Python对象)
-        #
-        # tweet1.content = 'new content'
-        # tweet1.save()
-        # tweet1.refresh_from_db()
-        # print(tweet1 == tweet2) # ✅ True [Django 的模型 __eq__ 定义: same model + same pk]
-        # print(tweet1.content)   # new content
-        # print(tweet2.content)   # default tweet content
 
         # 1. 点赞 + 1
         self.taotao_client.post(path=LIKE_BASE_URL, data=data)
