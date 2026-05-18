@@ -22,6 +22,8 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 
 class NotificationSerializerForUpdate(serializers.ModelSerializer):
+    # BooleanField 会自动兼容 true|false, 'true'|'false', 'True'|'False', '1'|'0' 等情况
+    # 并都转换为 python 的 boolean 类型 True|False
     unread = serializers.BooleanField()
 
     class Meta:

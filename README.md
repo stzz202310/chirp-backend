@@ -31,6 +31,9 @@ A practice project: implementing a simplified **Twitter backend** with **Django*
    
    cd /vagrant/hbase-2.4.4/
    ./bin/hbase shell         # Start HBase interactive shell
+   
+   telnet 127.0.0.1 11211    # Memcached
+   redis-cli                 # Redis
 
 3. Run Django commands
    ```bash

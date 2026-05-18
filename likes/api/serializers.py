@@ -70,7 +70,8 @@ class LikeSerializerForCreate(BaseLikeSerializerForCreateAndCancel):
 class LikeSerializerForCancel(BaseLikeSerializerForCreateAndCancel):
 
     def cancel(self):
-        # cancel 方法是一个自定义的方法，需要直接调用 serializer.cancel()
+        # cancel 是自定义方法, 不同于 create / update,
+        # 不会被 serializer.save() 触发, 需在 view 中显式调用 serializer.cancel()
         model_class = self._get_model_class(data=self.validated_data)
         deleted, rows_count = Like.objects.filter(
             content_type=ContentType.objects.get_for_model(model=model_class),
