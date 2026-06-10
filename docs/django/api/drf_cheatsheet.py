@@ -145,9 +145,8 @@ class Serializer(serializers.ModelSerializer):
 ✅ 调用在 views
 ✅ 数据处理逻辑在 serializers
 
-1️⃣ 序列化 (Object -> JSON / dict)
-   serializer = TweetSerializer(instance=tweet)
-   serializer.data  # 得到序列化后的字典
+1️⃣ 序列化 (输出): 数据库数据 → Python 字典 → 返回前端 JSON
+   示例：TweetSerializer (返回 Meta.fields 中定义的字段)
     
    1) instance 可以是 单个模型对象 或 QuerySet/列表 (many=True)
    2) 返回给前端通常是 dict 包裹 list，而不是裸 list
@@ -167,7 +166,10 @@ class Serializer(serializers.ModelSerializer):
        ❌ 不参与反序列化 (write / 校验 / 保存)
 
 
-2️⃣ 反序列化 (客户端数据 -> Python 对象)
+2️⃣ 反序列化 (输入): 前端数据 → 验证 → 存入数据库
+   流程: request data → is_valid(): 验证 Meta.fields → save() → create() / update()
+   示例: TweetSerializerForCreate
+   
    serializer = TweetSerializer(data=request.data)
    serializer.is_valid()       # 执行 字段级验证 + validate()
    serializer.errors           # You must call .is_valid() before accessing .errors

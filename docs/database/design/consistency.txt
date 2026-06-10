@@ -7,6 +7,7 @@
     1. 在 Comment 表插入新记录
     2. 同步更新 Tweet 表: tweet.comments_count (避免每次统计全表，提高查询性能)
     3. 同步更新 Redis 缓存计数
+    ⚠️ Cache 与 Denormalization: ✅优化读  ❌优化写
 
 Redis 缓存策略:
     - conn.expire(key, time): 设置缓存过期时间
@@ -15,7 +16,7 @@ Redis 缓存策略:
 
 Comment count 数据来源:
     1. Comment 表    最最准确    tweet.comment_set.count()   实时准确, 但 N+1 查询
-    2. Tweet 表      冗余字段    tweet.comments_count        冗余字段, 存在 MSOT 数据不一致风险
+    2. Tweet 表      冗余字段    tweet.comments_count        冗余字段, 存在数据不一致风险
     3. Redis cache   缓存加速    RedisHelper.get_count(...)
 
 数据不一致处理策略:
@@ -31,20 +32,21 @@ Comment count 数据来源:
             return likes_count
         return obj.likes_count
 
+
 ============================================================
 2. 高并发缓存更新问题 (示例: Memcached 缓存 关注列表)
 ============================================================
 用户 zhuzhu 已关注 {1,2,5}
 - 高并发下，zhuzhu 同时关注 6 和 7:
-    1. 关注 6: read {1,2,5} → {1,2,5,6} → write back
-    2. 关注 7: read {1,2,5} → {1,2,5,7} → write back
-- ❌ 直接更新缓存 → 数据丢失或覆盖(容易出错)
-- ✅ 让缓存失效  → 下一次访问从数据库读，回填 cache
-- ✅ 使用 Redis → 原子操作，避免高并发覆盖问题
+    webserver 1: read {1,2,5} → +6 → write back {1,2,5,6}
+    webserver 2: read {1,2,5} → +7 → write back {1,2,5,7}
+- ❌ 直接更新缓存 → 高并发下数据丢失/覆盖
+- ✅ 让缓存失效 → 下一次访问从 DB 读并回填 cache
+- ✅ 使用 Redis → SADD 原子操作，直接在服务端修改集合
 
 ⚠️ 注意:
+- Redis Set 支持增量更新 (SADD/SREM); Memcached 只能整体覆盖写
 - Web server 与 memcached 在不同机器上; 分布式锁可解决并发写问题，但效率低，破坏 cache 高速优势
-- 不加锁 → 数据不一致风险高
 
 
 ============================================================
@@ -72,3 +74,21 @@ UPDATE tweets_tweet SET likes_count = likes_count + 1 WHERE id=<instance.object_
  方法 1       ❌         ✅
  方法 2       ❌         ❌
  方法 3       ✅         ❌
+
+
+============================================================
+4. cache.delete vs cache.set 更新策略
+============================================================
+两种方法都有窗口期不一致: db.update() 完成后, cache.delete/set 执行前, 读请求拿到旧 cache, 这个窗口无法在应用层完全避免
+
+1. cache.delete: 窗口期短暂, 过后回源 DB 自然拿到最新值
+   db.update → [窗口] → cache.delete
+                 ↑ 这段时间读到旧数据, 但窗口很短
+
+2. cache.set: 除了同样的窗口, 还有并发写覆盖问题
+   线程A: db.update(值=10) ──────────────> cache.set(10)  # 旧值覆盖了新值
+   线程B:   db.update(值=20) -> cache.set(20)
+
+   结果: db=20，cache=10, 不一致持续到 TTL 过期
+
+推荐 cache.delete: 不是因为完美，而是少了并发写覆盖这一种出错方式; Memcached 多线程让并发写覆盖更容易发生

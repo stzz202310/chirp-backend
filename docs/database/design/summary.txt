@@ -6,11 +6,11 @@ Comment             MySQL       NA
 Friendship          HBase       Memcached
 Like                MySQL       NA
 NewsFeed            HBase       Redis
-Tweet               MySQL       Memcached, Redis
+Tweet               MySQL       Memcached(user, content, created_at) + Redis(count)
 TweetPhoto          MySQL       NA
 
 Gatekeeper          Redis       'gatekeeper:switch_friendship_to_hbase': {'percent': int, 'description': 'XXX'}
-Celery Broker       Redis
+Celery Broker       Redis       不能用 Memcached, 因为断电后数据丢失
 Ratelimit           Memcached
 
 ┌─────────────┐
@@ -53,8 +53,9 @@ Followings      'followings:{user_id}'              set(user_ids)   用户{user_
 
 ⚠️ UserProfile 使用 user_id (instead of userprofile_id) 作为缓存的key, 因为 user_id 是业务主入口，也是多数表单的外键
 ⚠️ 为什么不缓存 FOLLOWERS 粉丝列表?
-    1. 明星粉丝数量大 → 数据量巨大，缓存成本高
+    1. 明星粉丝数量大 → 数据量巨大，缓存成本高 (if 粉丝数 < 10000, 也可以缓存 粉丝列表)
     2. 明星粉丝更新频繁 → 缓存容易失效，命中率低
+    3. 使用场景少 → 仅在 fanout 和查看粉丝列表时用到
 
 
 Redis           key                               value
@@ -63,5 +64,6 @@ Newsfeed        'user_newsfeeds:{user_id}'        这个用户的新鲜事列表
 likes_count     'Tweet.likes_count:{tweet.id}'    这个帖子的点赞数
 comments_count  'Tweet.comments_count:{tweet.id}' 这个帖子的评论数
 
+likes_count, comments_count:
 ✅ Redis 层: 计数单独缓存, 与 tweet 对象缓存解耦
 ✅ DB 层: QuerySet.update() 不触发 signal, tweet 缓存不会被删除

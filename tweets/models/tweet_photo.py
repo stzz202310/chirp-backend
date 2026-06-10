@@ -15,6 +15,8 @@ class TweetPhoto(models.Model):
         default=TweetPhotoStatus.PENDING,
         choices=TWEET_PHOTO_STATUS_CHOICES,
     )
+    # choices 接受一个可迭代序列, 每个元素为二元组: (实际存入数据库的值, 人类可读的显示名称)
+    # 作用: 仅影响 admin 界面的显示, 对数据库字段本身无影响
 
     has_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True)

@@ -3,7 +3,10 @@ user [1 request] → web server (轻量级运算，Python) → 10 次 DB queries
 1 request: ~ 10 DB queries
 1 DB query ~ 10 Disk I/O 操作
 
-RateLimit: 限制 request 频率, 保护 DB 不被过载
+作用:
+   1. 限制请求频率，保护 DB 不被过载 (但无法减少 Web server 的压力)
+   2. 防止恶意攻击 (如暴力破解密码)
+
 ✅ 数据存储在 cache (Redis/Memcached)
    - 临时数据 + 高 QPS 支持
    - 可以跨多台 WebServer 共享
@@ -19,7 +22,7 @@ action:     login
 rate limit: 5/min
 未登录用户:  基于 IP 地址进行限流 (防止暴力破解、撞库、爬虫请求)   key='user_or_ip' [先 user 后 ip]
 已登录用户:  基于 user_id 进行限流 (避免单个账号异常频繁请求)     key='user'
-手机验证相关接口: 基于手机号进行限流 (防止短信轰炸、验证码滥用)
+手机验证相关接口: 基于手机号进行限流 (防止短信轰炸、验证码滥用)     key=phone
 
 
 1. 令牌法                  TODO [Homework] 自己实现
@@ -30,7 +33,8 @@ cache.set{key:val} = {"192.168.0.1_login":4, timeout=1min}
 cache.set{key, cache.get(key) - 1 = 3}
 用户 A [192.168.0.1] 1min内 第6次登陆 block
 
-缺点: "1min窗口"的定义并不是特别精确，大概限制
+优点: 效率高
+缺点: 准确性低, "1min窗口"的定义并不是特别精确, 大概限制
 例子: [0 57 58 59 60] [61 62 63 64 65]    窗口[57 65] 一共登陆了9次
 
 
@@ -48,5 +52,6 @@ if sum(cache.get(key) + cache.get(前01秒key) ... + cache.get(前60秒key)) > 5
 5/hour:created_at 精确到 分钟
 5/day: created_at 精确到 小时
 
+优点: 准确性高
 缺点: 60次 cache.get 请求
 优化: memcached get_many([keys])  节省 [webserver <==> cache] 机器之间的通讯时间

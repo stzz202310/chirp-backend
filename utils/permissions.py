@@ -13,6 +13,8 @@ class IsObjectOwner(BasePermission):
     """
 
     def has_permission(self, request, view):
+        # view：get_permissions(self) 中的 self (即当前 ViewSet 实例)
+        # self: IsObjectOwner() 实例, 由 return [IsObjectOwner()] 实例化传入
         return True
 
     def has_object_permission(self, request, view, obj): # obj = self.get_object()

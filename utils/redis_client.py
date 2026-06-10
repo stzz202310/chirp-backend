@@ -3,7 +3,8 @@ from django.conf import settings
 
 
 class RedisClient:
-    conn = None
+    conn = None # 延迟初始化：启动时不建立连接，确保 settings 加载完成后再初始化
+
     # 类属性 conn: 所有实例共享同一个连接(全局共享), 避免重复创建 Redis 连接
     # 一个 request 的生命周期 可能会执行 10 次 Redis GET + 10 次 Redis SET
     # 因此, 1 个 request 应复用 1 个 Redis connection
