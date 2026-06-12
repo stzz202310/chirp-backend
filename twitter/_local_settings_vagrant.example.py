@@ -24,3 +24,5 @@ LOGGING = {
         },
     },
 }
+
+HBASE_ENABLED = True

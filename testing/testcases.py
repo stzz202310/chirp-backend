@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import caches
@@ -20,6 +21,8 @@ class TestCase(DjangoTestCase):
 
     def setUp(self):
         self.clear_cache()
+        if not getattr(settings, 'HBASE_ENABLED', True):
+            return
         try:
             self.hbase_tables_created = True
             for hbase_model_class in HBaseModel.__subclasses__():
@@ -31,14 +34,17 @@ class TestCase(DjangoTestCase):
     def tearDown(self):
         if not self.hbase_tables_created:
             return
+        if not getattr(settings, 'HBASE_ENABLED', True):
+            return
         for hbase_model_class in HBaseModel.__subclasses__():
             hbase_model_class.drop_table()
 
     def clear_cache(self):
         caches['testing'].clear()
         RedisClient.clear() # ⚠️ 测试环境: Redis/Gatekeeper/Celery 的数据都会被清空
-        GateKeeper.turn_on(gk_name='switch_newsfeed_to_hbase')
-        GateKeeper.turn_on(gk_name='switch_friendship_to_hbase')
+        if getattr(settings, 'HBASE_ENABLED', True):
+            GateKeeper.turn_on(gk_name='switch_newsfeed_to_hbase')
+            GateKeeper.turn_on(gk_name='switch_friendship_to_hbase')
 
     @property
     def anonymous_client(self):

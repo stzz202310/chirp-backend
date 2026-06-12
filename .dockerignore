@@ -1,0 +1,49 @@
+# 构建镜像时忽略这些，减小镜像、加快构建
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 虚拟环境
+.venv/
+venv/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# Django
+*.sqlite3
+media/
+
+# Vagrant（迁移 Docker 前的开发环境，镜像不需要）
+.vagrant/
+Vagrantfile
+provision.sh
+
+# 大型二进制目录（镜像不需要，不忽略会大幅拖慢 build）
+hbase-2.4.4/
+thrift-0.14.2/
+installers/
+
+# docker-compose 挂载的配置目录（volume 挂载，不需要打进镜像）
+compose/
+
+# Docker 元文件本身
+docker-compose.yml
+Makefile
+.dockerignore
+
+# 文档
+docs/
+*.md
+
+# 敏感配置
+local_settings*.py

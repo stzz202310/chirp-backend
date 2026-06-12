@@ -1,5 +1,7 @@
 import time
 
+from django.conf import settings
+from unittest import skipIf
 from django_hbase.models import BadRowKeyError, EmptyColumnError
 from friendships.models import HBaseFollowing, HBaseFollower
 from friendships.services import FriendshipService
@@ -27,6 +29,7 @@ class FriendshipServiceTests(TestCase):
         self.assertEqual(user_id_set, {user1.id, user2.id,})
 
 
+@skipIf(not getattr(settings, 'HBASE_ENABLED', True), 'HBase is disabled')
 class HBaseTests(TestCase):
 
     @property
