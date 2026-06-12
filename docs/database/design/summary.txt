@@ -5,8 +5,8 @@ UserProfile         MySQL       Memcached
 Comment             MySQL       NA
 Friendship          HBase       Memcached
 Like                MySQL       NA
-NewsFeed            HBase       Redis
-Tweet               MySQL       Memcached(user, content, created_at) + Redis(count)
+NewsFeed            HBase       Redis List
+Tweet               MySQL       Redis List, Memcached(user, content, created_at) + Redis(count)
 TweetPhoto          MySQL       NA
 
 Gatekeeper          Redis       'gatekeeper:switch_friendship_to_hbase': {'percent': int, 'description': 'XXX'}

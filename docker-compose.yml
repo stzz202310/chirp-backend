@@ -1,0 +1,86 @@
+# 一条命令启动整套后端：MySQL + Redis + Memcached + Django + Celery worker
+# 暂不含 HBase（开关默认关，走 MySQL），后续需要时再补。
+
+services:
+  mysql:
+    container_name: chirp_mysql
+    image: mysql:8.0
+    platform: linux/amd64           # Apple 芯片必须：强制走 amd64（Rosetta）
+    command: --default-authentication-plugin=mysql_native_password --mysqlx=0
+    environment:
+      MYSQL_ROOT_PASSWORD: zhuzhu   # 须与 local_settings.py 里的 PASSWORD 一致
+      MYSQL_DATABASE: twitter       # 自动创建名为 twitter 的库
+    ports:
+      - "3306:3306"                 # 宿主机:容器，方便你用本地客户端连
+    volumes:
+      - mysql_data:/var/lib/mysql                         # 数据持久化（命名卷）
+      - ./compose/mysql/conf/my.cnf:/etc/mysql/my.cnf     # 挂配置
+      - ./compose/mysql/init:/docker-entrypoint-initdb.d/ # 挂初始化 SQL
+    healthcheck:  # 让别的服务能判断 mysql 是否"真的准备好"
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pzhuzhu"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: always
+
+  redis:
+    container_name: chirp_redis
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./compose/redis/conf/redis.conf:/etc/redis/redis.conf
+    command: redis-server /etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: always
+
+  memcached:
+    container_name: chirp_memcached
+    image: memcached:1.6
+    ports:
+      - "11211:11211"
+    command: ["-m", "64"]           # 限制 64MB 内存
+    restart: always
+
+  chirp:                            # Django 主服务
+    container_name: chirp_web
+    build: .                        # 用当前目录的 Dockerfile 构建
+    image: chirp/back-end:latest
+    depends_on:
+      mysql:
+        condition: service_healthy  # 等 mysql healthcheck 通过才启动
+      redis:
+        condition: service_healthy
+      memcached:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app                      # 挂载代码：本地改代码容器内即时生效（runserver 自动重载）
+    command:
+      - /bin/bash
+      - -c
+      - |
+        python manage.py migrate
+        python manage.py runserver 0.0.0.0:8000
+    restart: always
+
+  celery:                          # 异步任务 worker（newsfeed fanout 等）
+    container_name: chirp_celery
+    image: chirp/back-end:latest   # 复用 twitter 服务构建出的同一个镜像
+    depends_on:
+      - chirp
+      - redis
+    volumes:
+      - .:/app
+    command: celery -A twitter worker -l info -Q default,newsfeeds
+    restart: always
+
+volumes:
+  mysql_data:
+  redis_data:
