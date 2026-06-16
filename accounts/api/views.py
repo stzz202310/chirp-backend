@@ -3,6 +3,7 @@ from django.contrib.auth import (
     logout as django_logout,
     authenticate as django_authenticate,
 )
+from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.utils.decorators import method_decorator
 from ratelimit.decorators import ratelimit
@@ -26,7 +27,8 @@ from utils.permissions import IsObjectOwner
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all()                   # ModelViewSet 必需
     serializer_class = UserSerializerWithProfile    # ModelViewSet 必需
-    permission_classes = (IsAdminUser,)
+    # permission_classes = (IsAdminUser,)
+    permission_classes = (IsAuthenticated,)
 
 
 class AccountViewSet(viewsets.ViewSet): # 登陆 注册
@@ -106,7 +108,17 @@ class AccountViewSet(viewsets.ViewSet): # 登陆 注册
 class UserProfileViewSet(
     viewsets.GenericViewSet,
     viewsets.mixins.UpdateModelMixin,
+    # PUT   → update(partial=False)        → 全量更新，所有字段必须传
+    # PATCH → partial_update(partial=True) → 局部更新，只更新传的字段
 ):
-    queryset = UserProfile
+    queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializerForUpdate
-    permission_classes = (IsAuthenticated, IsObjectOwner,)  # AND
+    permission_classes = (IsAuthenticated, IsObjectOwner,)
+
+    def get_object(self):
+        # URL 里传的是 user_id，而不是 userprofile_id
+        # user_id 不存在时直接触发 MySQL FK 约束报错，需要先验 user 存在再 get_or_create
+        user = get_object_or_404(klass=User, pk=self.kwargs['pk'])
+        profile, _ = UserProfile.objects.get_or_create(user_id=user.id)
+        self.check_object_permissions(self.request, profile)
+        return profile

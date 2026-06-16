@@ -1,7 +1,7 @@
 
-============================================================
+=====================================================================
 1. Denormalization (示例: Tweet.comments_count)
-============================================================
+=====================================================================
 
 场景: 新增一条 Comment
     1. 在 Comment 表插入新记录
@@ -33,25 +33,32 @@ Comment count 数据来源:
         return obj.likes_count
 
 
-============================================================
+=====================================================================
 2. 高并发缓存更新问题 (示例: Memcached 缓存 关注列表)
-============================================================
-用户 zhuzhu 已关注 {1,2,5}
-- 高并发下，zhuzhu 同时关注 6 和 7:
+=====================================================================
+场景: 用户 zhuzhu 已关注 {1,2,5}, 高并发下同时关注 6 和 7
     webserver 1: read {1,2,5} → +6 → write back {1,2,5,6}
     webserver 2: read {1,2,5} → +7 → write back {1,2,5,7}
-- ❌ 直接更新缓存 → 高并发下数据丢失/覆盖
-- ✅ 让缓存失效 → 下一次访问从 DB 读并回填 cache
-- ✅ 使用 Redis → SADD 原子操作，直接在服务端修改集合
+    结果: 后写覆盖前写, 丢了 6 或 7  => lost update (读-改-写丢更新)
 
-⚠️ 注意:
-- Redis Set 支持增量更新 (SADD/SREM); Memcached 只能整体覆盖写
-- Web server 与 memcached 在不同机器上; 分布式锁可解决并发写问题，但效率低，破坏 cache 高速优势
+根因: 缓存把整个关注集合存成一个 blob, 更新只能 read-modify-write, 并发下非原子
+    ⚠️ 与第4节例子3(并发写覆盖) 同源, 都是 "非原子的写"
+    注: DB 层无此问题 —— friendship 是一行一关注(各自独立 INSERT), 不存在 RMW
+
+解法 (优 → 次):
+    ✅ Redis SADD/SREM: 服务端原子增量改集合, 不读不覆盖, 还保持缓存热  (最优)
+    ✅ 让缓存失效:      下次访问从 DB 读并回填 (= 第4节 delete 策略)
+                       能修 lost update, 但仍带第4节例子2的 read-repopulate race
+    ❌ 直接覆盖写缓存:  就是上面的 lost update
+    ❌ 分布式锁:        能串行化, 但效率低, 破坏 cache 高速优势
+
+⚠️ Redis Set 支持增量更新(SADD/SREM); Memcached 只能整体覆盖写, 所以才被迫 RMW
+   (web server 与 cache 在不同机器, 这也是为什么不能用进程内锁)
 
 
-============================================================
+=====================================================================
 3. 高并发计数器更新示例 (示例: Tweet.likes_count)
-============================================================
+=====================================================================
 likes.listeners
 
 方法 1
@@ -76,19 +83,174 @@ UPDATE tweets_tweet SET likes_count = likes_count + 1 WHERE id=<instance.object_
  方法 3       ✅         ❌
 
 
-============================================================
+=====================================================================
 4. cache.delete vs cache.set 更新策略
-============================================================
-两种方法都有窗口期不一致: db.update() 完成后, cache.delete/set 执行前, 读请求拿到旧 cache, 这个窗口无法在应用层完全避免
+=====================================================================
+问题: DB 写完后如何同步缓存 —— 删掉缓存 (delete) 还是写入新值 (set)?
 
-1. cache.delete: 窗口期短暂, 过后回源 DB 自然拿到最新值
-   db.update → [窗口] → cache.delete
-                 ↑ 这段时间读到旧数据, 但窗口很短
+例子 1 [delete & set 都有] 写窗口:
+   db.update → [窗口] → cache.delete/set
+                 ↑ 窗口内读到旧 cache; 无法在应用层完全消除, 但窗口很短
 
-2. cache.set: 除了同样的窗口, 还有并发写覆盖问题
-   线程A: db.update(值=10) ──────────────> cache.set(10)  # 旧值覆盖了新值
+例子 2 [delete & set 都有] 读穿透回填 (read-repopulate):
+   线程A(读): cache miss -> 读 DB 得旧值 V0 ───────────────> 回填 cache=V0  # 旧值又被写回
+   线程B(写):              db.update(V1) -> delete / set(V1)
+   结果: db=V1, cache=V0, 不一致到 TTL 过期 (A 的回填落在 B 之后)
+   缓解: 延迟双删 (update -> delete -> sleep -> 再 delete) / 版本号 / 较短 TTL
+
+例子 3 [仅 set 有] 并发写覆盖:
+   线程A: db.update(值=10) ──────────────> cache.set(10)  # 慢, 旧值覆盖了新值
    线程B:   db.update(值=20) -> cache.set(20)
+   结果: db=20, cache=10, 不一致到 TTL 过期
+   注1: 应用层两个线程 set 的先后顺序导致, 与缓存端是否多线程无关 (Redis 单线程也照样发生)
+   注2: delete 没有此 race —— "删除" 幂等, 谁先谁后结果都是 "空"; "写值" 非幂等, 顺序决定最终值
 
-   结果: db=20，cache=10, 不一致持续到 TTL 过期
+------------------------------------------------------------
+结论: 例子1/例子2 两者都逃不掉; 但 例子3(写覆盖) 只有 set 会中 => delete 错法更少
 
-推荐 cache.delete: 不是因为完美，而是少了并发写覆盖这一种出错方式; Memcached 多线程让并发写覆盖更容易发生
+何时 delete 优于 set (默认推荐 delete):
+   - 写多读少:        set 每次写都重算 + 写入一个可能永不被读的值; delete 惰性, 下次读才回源, 省计算
+   - 缓存值计算成本高: 同上, 避免无谓重算 / 序列化
+   - 高并发写:        例子3 写覆盖更容易命中且顺序无法保证; delete 根本没有这种错法
+
+何时 set 也合理:
+   - 读多写少 且 对命中率敏感: set 写后缓存仍是热的, 避免 "写后第一次读" 的 cache miss 抖动
+   - 单写者 + 缓存值就是刚写入的值 + 计算便宜: 无写覆盖风险, set 还省下一次回源 DB
+
+
+=====================================================================
+5. NewsFeed 缓存并发重建 (示例: Redis List 缓存 newsfeed)
+=====================================================================
+
+背景:
+    newsfeed 缓存用 Redis List 存, 按 created_at 倒序 (最新在左 lpush, 最旧在右 rpush)
+    发推 -> Celery fanout (多 worker 并发) -> 给每个粉丝的 user_newsfeeds:<id> 写一条
+        celery -A twitter worker        # 没有 --concurrency, 默认 = CPU 核数, 多进程并发
+    三个入口 (utils/redis_helper.py):
+        load_objects            读取: cache hit -> lrange; cache miss -> 回源重建
+        push_objects            写入 (fanout 调用): 给已有缓存增量加一条
+        _load_objects_to_cache  全量重建: 从 DB 读快照整体写入缓存
+
+    DB 不会有重复/缺失: NewsFeed unique_together (user,tweet); 所有数据问题都只在 Redis 缓存
+    全量重建 = DEL -> RPUSH -> EXPIRE; "全量" = 整列表替换, 装 DB 倒序前 REDIS_LIST_LENGTH_LIMIT(200) 条
+
+⚠️ 排查坑 (DB0 vs DB1): settings.REDIS_DB = 0 if TESTING else 1
+    docker exec -it chirp_redis redis-cli -n 1 llen "user_newsfeeds:1"
+
+------------------------------------------------------------
+#1 最初版本  ->  重复 [nf2, nf1, nf2, nf1]
+------------------------------------------------------------
+代码: _load_objects_to_cache 直接 rpush 追加 (不先 del); cache-miss 分支无锁
+    def _load_objects_to_cache(key, objects):
+        serialized = [serialize(o) for o in objects]
+        conn.rpush(key, *serialized)      # ← 直接追加, 没有先 del
+        conn.expire(key, EXPIRE)
+    # load_objects / push_objects 的 cache-miss: 无锁, 直接 lazy_load + _load_objects_to_cache
+
+现象: dog_husky 的 feed 出现成对重复  newsfeeds[8..11] = nf2, nf1, nf2, nf1
+
+根因: check-then-act 非原子 + Celery 并发
+    husky 连发 tweet1/tweet2, 两个 fanout 任务并行, 都给 key=user_newsfeeds:1 各 create 一条并 push
+    1. 任务A(tweet2)、任务B(tweet1) 几乎同时进 push, 都发现 key 不存在 (缓存还没建好)
+    2. 任务A 先从 DB 读到全量 {nf1,nf2} -> rpush [nf2,nf1]
+    3. 任务B 也从 DB 读到全量 {nf1,nf2} -> 不先 del, 直接 rpush 接在后面
+    4. cache = [nf2, nf1, nf2, nf1]   两份快照拼接
+    指纹: 单个任务逻辑造不出 "成对重复", 只有 "全量快照拼接" 才会 => 并发重建
+
+------------------------------------------------------------
+#2 第一次修复 (pipeline + 锁 + double-check)  ->  解决 #1, 但 tw3 消失
+------------------------------------------------------------
+改动:
+    (1) _load_objects_to_cache 用 pipeline 做 DEL -> RPUSH -> EXPIRE, 整体原子替换 (不再追加)
+    (2) load_objects / push_objects 的 cache-miss 分支: 加 Redis 锁 + double-check 后再从 DB 全量重建
+        with conn.lock(f'{key}:lock'):
+            if conn.exists(key): return      # double-check: 别人已建好
+            objects = lazy_load(...)
+            _load_objects_to_cache(key, objects)
+
+    #1 为何解决:
+        - pipeline 默认 transaction=True, 走 MULTI/EXEC: 每个进程的 DEL+RPUSH 各自原子、不交错
+          => 最坏只是 "后写覆盖, 拿到稍旧快照", 绝不会拼接重复
+        - 锁: 同一 key 同时只允许一个进程回源重建, 防缓存击穿/惊群
+        ⚠️ 去重依赖 pipeline 为事务型; 若关掉 transaction, DEL/RPUSH 可被打断交错,
+           重复会复发 —— 届时锁才成为去重的必要条件
+
+现象 (引入新 bug): seed 后 husky 的 feed 少了 tweet3 (50 条变 49), 顺序也乱 (7/8、28/29 互换)
+    ⚠️ DB 有 50 条含 tweet3; 缺失只在缓存
+
+根因: push_objects 的 "cache-miss 全量重建 + double-check" 在高并发 fanout 下会丢条目
+    关键前提: seed 期间没有任何 "读", 缓存完全由 push_objects(fanout) 建出
+    W1 push(tweet1): cache 冷 -> 抢到锁 -> SELECT 到快照 {1,2} -> 写入 -> 释放锁
+    W3 push(tweet3): cache 冷 -> 等待锁 -> 拿锁后 double-check 发现 cache 已存在 -> return (跳过!)
+                     但 W1 的快照里没有 tweet3 (SELECT 时它还不可见) => tweet3 永久丢失
+    乱序 7/8、28/29: 多 worker 并发 lpush 到热缓存, push 顺序≠tweet_id 顺序
+                    (轻微副作用, 非数据丢失)
+
+------------------------------------------------------------
+#3 第二次修复 (push 不重建冷缓存)  ->  同时解决 #1 和 #2   ✅
+------------------------------------------------------------
+改动: push_objects 只在 "热缓存" 增量 lpush; "冷缓存" 直接 return, 不在 push 里重建。
+      冷缓存交给读路径 load_objects 惰性重建。
+    def push_objects(key, obj, ...):
+        if not conn.exists(key):
+            return                       # 冷缓存: 不重建, 留给读路径
+        conn.lpush(key, serialize(obj))
+        conn.ltrim(key, 0, LIMIT-1)
+
+为什么彻底干净:
+    - push 不再回源重建 => 根除 #2 的 "快照漏条 + double-check 跳过" 丢失
+    - 唯一的重建路径只剩 load_objects (读), 仍是 锁 + pipeline DEL+RPUSH 整体替换
+      => #1 的重复依旧不会发生
+    - 读一定发生在所有写之后, load_objects 重建必从 DB 拿到完整快照 (本例: 50 条全在)
+    => 从 "依赖并发时序" 变成 "确定性正确"
+
+各路径职责 (最终):
+    load_objects (读):          cache hit -> lrange;  cache miss -> 锁 + 全量重建
+    push_objects (写, fanout):  热缓存 (key 存在) -> lpush+ltrim;  冷缓存 (key 不存在) -> 直接 return
+    _load_objects_to_cache:     pipeline DEL+RPUSH+EXPIRE 整体原子替换 (唯一重建入口)
+
+
+=====================================================================
+6. 缓存层容错: 缓存挂了不能把整站拖垮 (graceful degradation)
+=====================================================================
+
+原则: 缓存是 best-effort 加速层, 不是数据源。任一缓存组件故障, 都应 "降级回源 DB",
+      而不是把缓存异常抛到用户面前 (小故障放大成 500 / 整站不可用)。
+
+本项目三层缓存 + 各自的失败方向:
+    组件               用途                 故障时降级                         失败方向
+    ----------------  -------------------  -------------------------------  ----------------
+    RedisHelper       newsfeed list 缓存    读 -> 读 DB; 写 -> 跳过           读可用, 写跳过(下次重建)
+    RedisHelper       计数 (likes_count)    读 -> 读 DB                      读到 DB 真值
+    GateKeeper        功能开关 (MySQL/HBase) 开关读不到 -> 当"关"(percent=0)    回退 MySQL 稳定主路径
+    Memcached         Model 对象缓存         get -> 当 miss 回源 DB; set 静默  读可用
+
+实现要点:
+    (1) Redis 系 (RedisHelper / GateKeeper): 手动 try/except redis.exceptions.RedisError
+        except 里 logger.warning + 回源 DB / 返回安全默认值
+        ⚠️ GateKeeper 在所有热路径上 (每次 feed 读写都判 is_switch_on),
+           且会抢在 RedisHelper 降级之前先抛 —— 它没容错, RedisHelper 的容错就轮不到执行
+        ⚠️ 失败默认值要 "fail-safe": 开关读不到 -> 当关 -> 走稳定的 MySQL, 而不是误开 HBase
+
+    (2) Memcached: 不在代码里包 try/except, 而是配置 OPTIONS={'ignore_exc': True}
+        => get 故障返回 None (当 cache miss), set 故障静默; MemcachedHelper 的
+           "get -> miss -> 读 DB -> set" 形状天然就降级了, 代码零改动
+        另配 use_pooling=True: 每线程独立连接, 根治 pymemcache 单 socket 多线程共享的 "响应错位"
+        (线程A 收到线程B 的响应)
+
+dev / prod 一致性 (踩坑):
+    曾经 dev 用 LocMemCache 绕开 pymemcache 并发问题, 但 LocMemCache 是 "单进程内存":
+        - 不走序列化 (存的是对象引用), 掩盖 pickle 问题
+        - 各进程/容器各一份, 不共享, 掩盖跨进程缓存一致性问题
+        - 没有网络故障模式, 掩盖降级逻辑是否生效
+    => 用 use_pooling 根治并发问题后, dev 切回真 memcached (host 用服务名 memcached),
+       与生产环境仅 host 不同, 避免 "dev 测不出、上线才炸"
+
+验证降级 (手动拉闸):
+    docker compose stop memcached -> 访问 feed / tweet 详情页应正常 (对象缓存回源 DB)
+    docker compose stop redis     -> 访问 feed 应正常 (load_objects / get_count / GateKeeper 都回源 DB)
+
+    ⚠️ redis 在本项目身兼三职: 缓存(DB1) + Celery broker(DB2) + GateKeeper
+       停 redis 时只测 "读" (访问 feed, 会降级回源 DB);
+       不要在此期间 "发推" —— fanout 任务投递不进 broker, 可能丢失/报错。
+       memcached 无此顾虑, 停了只影响对象缓存。

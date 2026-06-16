@@ -77,6 +77,10 @@ class FriendshipService(object):
         # return instance is not None
 
     @classmethod
+    def get_followers_count(cls, to_user_id):
+        return len(cls.get_follower_user_id_list(to_user_id=to_user_id))
+
+    @classmethod
     def get_following_count(cls, from_user_id):
         user_id_set = cls.get_following_user_id_set(from_user_id=from_user_id)
         return len(user_id_set)

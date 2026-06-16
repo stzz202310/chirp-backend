@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'comments',
     'likes',
     'inbox',
+    'testing',
 ]
 
 REST_FRAMEWORK = {
@@ -166,23 +167,31 @@ AWS_S3_REGION_NAME = 'us-west-1'
 MEDIA_ROOT = 'media/'
 
 
+#   use_pooling=True: 每线程独立连接, 根治 pymemcache 单 socket 多线程共享导致的 "响应错位"
+#                     (线程A 收到线程B 的响应)
+#   ignore_exc=True:  memcached 故障时 get 返回 None(当作 cache miss 回源 DB), set 静默失败
+#                     => 缓存 best-effort, 挂了不把故障放大成整站异常 (MemcachedHelper 已是 get->miss->DB->set)
+MEMCACHED_OPTIONS = {'use_pooling': True, 'ignore_exc': True}
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
         'LOCATION': '127.0.0.1:11211',
         'TIMEOUT': 86400,
+        'OPTIONS': MEMCACHED_OPTIONS,
     },
     'testing': {    # 测试环境缓存(避免 key 冲突)
         'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
         'LOCATION': '127.0.0.1:11211',
         'TIMEOUT': 86400,
         'KEY_PREFIX': 'testing', # 实际存储 key 示例: 'testing_followings:3'
+        'OPTIONS': MEMCACHED_OPTIONS,
     },
     'ratelimit': {  # 限流专用缓存
         'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
         'LOCATION': '127.0.0.1:11211',
         'TIMEOUT': 86400 * 7,
         'KEY_PREFIX': 'rl',
+        'OPTIONS': MEMCACHED_OPTIONS,
     },
 }
 

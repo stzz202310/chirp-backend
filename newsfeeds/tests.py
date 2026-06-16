@@ -48,10 +48,10 @@ class NewsFeedServiceTests(TestCase):
         key = USER_NEWSFEEDS_PATTERN.format(user_id=self.taotao.id)
         self.assertEqual(conn.exists(key), False)
 
-        # 2. cache hit
+        # 2. redis_helper.push_objects 不重建冷缓存 (新行为): 创建新 newsfeed 后, 缓存仍不存在
         tweet2 = self.create_tweet(user=self.taotao)
         newsfeed2 = self.create_newsfeed(user=self.taotao, tweet=tweet2)
-        self.assertEqual(conn.exists(key), True)
+        self.assertEqual(conn.exists(key), False)
 
         newsfeeds = NewsFeedService.get_cached_newsfeeds(user_id=self.taotao.id)
         self.assertEqual([f.id for f in newsfeeds], [newsfeed2.id, newsfeed1.id])

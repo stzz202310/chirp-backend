@@ -90,15 +90,15 @@ class TweetServiceTests(TestCase):
         conn = RedisClient.get_connection()
         tweet1 = self.create_tweet(user=self.taotao, content='tweet1')
         key = USER_TWEETS_PATTERN.format(user_id=self.taotao.id)
-        self.assertEqual(conn.exists(key), True)
+        self.assertEqual(conn.exists(key), False)
 
         # 1. cache miss
         self.clear_cache()
         self.assertEqual(conn.exists(key), False)
 
-        # 2. cache hit
+        # 2. push 不重建冷缓存: 创建后缓存仍不存在
         tweet2 = self.create_tweet(user=self.taotao, content='tweet2')
-        self.assertEqual(conn.exists(key), True)
+        self.assertEqual(conn.exists(key), False)
 
         tweets = TweetService.get_cached_tweets(user_id=self.taotao.id)
         self.assertEqual([tweet.id for tweet in tweets],[tweet2.id, tweet1.id])

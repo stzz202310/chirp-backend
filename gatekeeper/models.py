@@ -1,20 +1,31 @@
+import logging
+
+from redis.exceptions import RedisError
+
 from utils.redis_client import RedisClient
+
+logger = logging.getLogger(__name__)
 
 
 class GateKeeper(object):
 
     @classmethod
     def get(cls, gk_name):
-        conn = RedisClient.get_connection()
         name = f'gatekeeper:{gk_name}'
-        if not conn.exists(name):
-            return {'percent': 0, 'description': ''}
+        try:
+            conn = RedisClient.get_connection()
+            if not conn.exists(name):
+                return {'percent': 0, 'description': ''}
 
-        redis_hash = conn.hgetall(name=name)
-        return {
-            'percent': int(redis_hash.get(b'percent', 0)),
-            'description': str(redis_hash.get(b'description', ''))
-        }
+            redis_hash = conn.hgetall(name=name)
+            return {
+                'percent': int(redis_hash.get(b'percent', 0)),
+                'description': str(redis_hash.get(b'description', ''))
+            }
+        except RedisError as e:
+            # Redis 故障: 开关读不到 -> 当作 "关"(percent=0) -> 回退 MySQL 稳定主路径 (fail-safe)
+            logger.warning('GateKeeper.get fallback to OFF, gk=%s, err=%s', gk_name, e)
+            return {'percent': 0, 'description': ''}
 
     @classmethod
     def set_kv(cls, gk_name, key, value):

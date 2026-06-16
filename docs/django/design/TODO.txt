@@ -1,7 +1,7 @@
 
 01. accounts.api.serializers    TODO [Homework] 增加验证 username 是不是只由给定的字符集合构成
 02. docs.databases.ratelimit    TODO [Homework] 自己实现令牌法, django-ratelimit 优化
-03. twitter.urls                TODO [Myself]   ❌ 不推荐：/api/profiles/{profile_id}/
+03. twitter.urls                TODO [Complete] ❌ 不推荐：/api/profiles/{profile_id}/
 04. docs.db.optimization        TODO [Homework] DROP FOREIGN KEY CONSTRAINT
 05. comments.api.views          TODO [Homework] 有权限看这个tweet的用户, 才有权限看这个tweet的评论
 06. likes.listeners             TODO [Homework] 增加 Comment.likes_count, 类似 Tweet.likes_count
@@ -20,7 +20,8 @@
                                                 通过 query 参数 with_preview_comments, 控制是否返回前三条评论
 18. newsfeeds.api.views         TODO [Homework] 新内容提示 "你有 N 条新内容", 这个功能是怎么实现的?
 19. newsfeeds.models.newsfeed   TODO [Complete] created_at 应等于 tweet.created_at，而非 auto_now_add=True
-
+20. tweets.api.serializers      TODO [Myself]   缓存 tweet_photo: 消除 get_photo_urls 的 N+1
+21. tweets.api.views.retrieve   TODO [Myself]   缓存穿透: 不存在的 tweet_id 反复请求每次都打 DB
 
 ============================================================
 3. UserProfile API 设计说明
@@ -34,7 +35,8 @@
 - 前端必须先知道 profile_id（后端实现的细节）
 - 一旦 profile 表结构或生成策略变化，API 设计被锁死
 
-✅ 正确设计 /api/users/{user_id}/profile/
+✅ 正确设计 /api/users/{user_id}/profile/     URL 语义上更"RESTful" (profile 是 user 的子资源)
+✅ 正确设计 /api/profiles/{user_id}/
 原则：
 - 前端只认 user_id (业务主键)
 - 后端负责 User → UserProfile 的映射
@@ -176,3 +178,49 @@ Polling (轮询): 前端定时主动发请求询问后端 "有没有新数据"
        传入的字符串不再被忽略
        ❌ 直接传字符串                                 → Django 序列化时 str.isoformat() 报错
        ✅ 直接传字符串 → isoparse 还原为 datetime 再传入 → Django 序列化时 datetime.isoformat() 正常
+
+
+============================================================
+20. 缓存 tweet_photo (消除 get_photo_urls 的 N+1)
+============================================================
+现状: TweetSerializer.get_photo_urls 用 obj.tweetphoto_set.all() 取图,
+     即使 Tweet 本体已从 Redis 取到, photo 仍每条一次 DB —— 一页 20 条 = 20 次查询 (N+1)
+     (feed 是最热路径, 这是当前最大的低效点)
+
+前提: 本项目 tweet_photo 不可变 —— 仅发推时 create_photos_from_files 创建, 无 "编辑照片" 入口
+
+方案 A (推荐): 反范式到 Tweet
+  Tweet 加 photo_urls 字段 (JSON/array), 创建时写入
+  读: Redis 取 Tweet blob 自带 photo_urls => 0 次额外查询
+  与现有 "list 缓存 = 单 model 序列化" 结构天然融合, 读路径零改动
+
+方案 B: Memcached 缓存 photo 列表 (仿 cached_user)
+  按 tweet_id 缓存 photo 列表, get_photo_urls 走 Memcached
+  读: 每条 1 次 memcached (无 DB); 多一层 round-trip + 需失效逻辑
+
+⚠️ 坑:
+  1. 若 photo.file.url 是 S3 presigned (会过期) URL, 缓存里只能存 key/路径, URL 读时现拼
+  2. "不可变" 是前提; 若将来支持编辑照片, 需在增删 photo 时同步刷新 Tweet 缓存
+
+
+============================================================
+21. 缓存穿透 (cache penetration): retrieve 查不存在的 tweet
+============================================================
+现状: retrieve 走 get_object_through_cache —— cache miss 才回源 DB, 但 "不存在的 id"
+     从不写缓存, 于是对 /api/tweets/-1/ 反复请求每次都 cache miss -> 打 DB
+     恶意刷不存在的 id => DB 被击穿 (cache penetration)
+
+区分三个 "穿":
+  穿透 penetration: 查 "不存在" 的数据, 缓存永远不命中, 每次落 DB   <- 本条
+  击穿 breakdown:   单个热点 key 过期瞬间, 大量请求同时回源       (已用 load_objects 的锁缓解)
+  雪崩 avalanche:   大量 key 同时过期, 集体回源                  (TTL 加随机抖动缓解)
+
+方案:
+  A. 缓存空值: DB 查不到时也写一个 "空标记" (短 TTL, 如 60s), 后续请求直接被挡在缓存层
+     cache.set(key, EMPTY, ex=60)   下次 get 命中 EMPTY -> 直接 404, 不落 DB
+     代价: 占少量内存; 真数据创建后需等空标记过期或主动删除
+  B. 布隆过滤器 (Bloom Filter): 请求前先判 id 是否 "可能存在", 不存在直接拒
+     适合海量 id、空值缓存装不下的场景; 实现复杂, 本项目规模用 A 即可
+
+⚠️ A 的空值需可与真实对象区分 (现在 get_object_through_cache 的 `if obj:` 把 None 当 miss,
+   需引入一个明确的 EMPTY 哨兵值, 否则空标记会被当成 cache miss)
