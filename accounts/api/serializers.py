@@ -3,6 +3,7 @@ from rest_framework import exceptions
 from rest_framework import serializers
 
 from accounts.models import UserProfile
+from friendships.services import FriendshipService
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -11,7 +12,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ('id', 'username',)
 
 
-class UserSerializerWithProfile(UserSerializer):
+class UserSerializerForTweet(UserSerializer):
     # user.profile.nickname
     nickname = serializers.CharField(source='profile.nickname')
     avatar_url = serializers.SerializerMethodField()
@@ -27,19 +28,30 @@ class UserSerializerWithProfile(UserSerializer):
         return None
 
 
-class UserSerializerForTweet(UserSerializerWithProfile):
+class UserSerializerWithProfile(UserSerializerForTweet):
+    followers_count = serializers.SerializerMethodField()
+    followings_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'nickname', 'avatar_url', 'followers_count', 'followings_count',)
+
+    def get_followers_count(self, obj):
+        return FriendshipService.get_followers_count(to_user_id=obj.id)
+
+    def get_followings_count(self, obj):
+        return FriendshipService.get_following_count(from_user_id=obj.id)
+
+
+class UserSerializerForComment(UserSerializerForTweet):
     pass
 
 
-class UserSerializerForComment(UserSerializerWithProfile):
+class UserSerializerForLike(UserSerializerForTweet):
     pass
 
 
-class UserSerializerForLike(UserSerializerWithProfile):
-    pass
-
-
-class UserSerializerForFriendship(UserSerializerWithProfile):
+class UserSerializerForFriendship(UserSerializerForTweet):
     pass
 
 

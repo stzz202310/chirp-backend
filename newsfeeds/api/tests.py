@@ -144,37 +144,53 @@ class NewsFeedApiTests(TestCase):
         self.assertEqual(results[1]['tweet']['user']['username'], 'pipi')
 
     def test_tweet_cache(self):
+        # 本测试演示 Redis list 与 Memcached 两层缓存的交互与差异:
+        #   Redis list: /tweets 存整个 Tweet 对象; /newsfeeds 只存 tweet_id
+        #   Memcached:  缓存单个 User / Tweet 对象, 经 cached_user / cached_tweet 解析
+
+        # 0. baseline: 读一遍 newsfeeds 和 tweets, 两层缓存均已建立
         tweet = self.create_tweet(user=self.taotao, content='taotao tweet')
         self.create_newsfeed(user=self.zhuzhu, tweet=tweet)
-        response = self.zhuzhu_client.get(NEWSFEEDS_URL)
+        response = self.zhuzhu_client.get(path=NEWSFEEDS_URL)
         results = response.data['results']
         self.assertEqual(results[0]['tweet']['user']['username'], 'taotao')
         self.assertEqual(results[0]['tweet']['content'], 'taotao tweet')
 
-        # 1. update username
+        response = self.zhuzhu_client.get(path=TWEETS_URL, data={'user_id': self.taotao.id})
+        results = response.data['results']
+        self.assertEqual(results[0]['user']['username'], 'taotao')
+        self.assertEqual(results[0]['content'], 'taotao tweet')
+
+        # 1. 改 username -> 两个接口都能看到新值
+        #    Redis list 存的字段: /tweets 存 user_id + content + created_at + count (不含 tweet_photo);
+        #                        /newsfeeds 存 user_id + tweet_id
+        #    两边都只存 user_id (不存 username): username 始终经 cached_user -> Memcached 实时解析,
+        #    而 User.save() 触发 post_save 把 Memcached 里的 User invalidate, 下次读回源拿到新值
         self.taotao.username = 'pipi'
         self.taotao.save()
-        response = self.zhuzhu_client.get(NEWSFEEDS_URL)
+        response = self.zhuzhu_client.get(path=NEWSFEEDS_URL)
         results = response.data['results']
         self.assertEqual(results[0]['tweet']['user']['username'], 'pipi')
 
-        # 2. update tweet's content
-        # tweet.save() 触发 post_save 信号后：
-        # Memcached  ✅ 已更新（handler 无条件刷新）
-        # Redis      ❌ 不更新（handler 在 not created 时提前 return）
-        #
-        # 由此导致两个接口的行为不一致:
-        # GET /newsfeeds: NewsFeed 在 Redis 中只存了 tweet_id, 读取 tweet 内容时回落到 Memcached, 因此返回最新的 content ✅
-        # GET /tweets: 直接命中 Redis 中的旧 Tweet 对象, content 停留在修改前的值 ❌
+        response = self.zhuzhu_client.get(path=TWEETS_URL, data={'user_id': self.taotao.id})
+        results = response.data['results']
+        self.assertEqual(results[0]['user']['username'], 'pipi')
+
+        # 2. 改 tweet.content -> 两个接口行为不一致 (多层缓存失效不彻底的经典坑)
+        #    tweet.save() 的 post_save 信号:
+        #      Memcached  ✅ 失效 (invalidate_object_cache 无条件 invalidate, 下次读回源 DB)
+        #      Redis list ❌ 不更新 (push_tweet_to_cache 在 not created 时提前 return)
+        #    => GET /newsfeeds: 只存 tweet_id, 经 cached_tweet -> Memcached(已失效) 拿到新 content ✅
+        #       GET /tweets:    直接反序列化 Redis 里的旧 Tweet 对象, content 停留在旧值 ❌
         tweet.content = 'taotao tweet2'
         tweet.save()
-        response = self.zhuzhu_client.get(NEWSFEEDS_URL)
+        response = self.zhuzhu_client.get(path=NEWSFEEDS_URL)
         results = response.data['results']
         self.assertEqual(results[0]['tweet']['content'], 'taotao tweet2')
 
-        response = self.zhuzhu_client.get(TWEETS_URL, data={'user_id': self.taotao.id})
+        response = self.zhuzhu_client.get(path=TWEETS_URL, data={'user_id': self.taotao.id})
         results = response.data['results']
-        self.assertEqual(results[0]['content'], 'taotao tweet') # ⚠️ 预期中的旧值（Redis 未失效）
+        self.assertEqual(results[0]['content'], 'taotao tweet') # ⚠️ 旧值: /tweets 的 Redis list 未失效
 
     def _paginate_to_get_newsfeeds(self, client):
         # paginate until the end 模拟用户上拉加载更多

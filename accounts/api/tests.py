@@ -130,41 +130,41 @@ class UserProfileAPITests(TestCase):
         taotao, taotao_client = self.create_user_and_client(username='taotao')
         zhuzhu, zhuzhu_client = self.create_user_and_client(username='zhuzhu')
         profile_taotao = taotao.profile
-        profile_taotao.nickname = 'old nickname'
+        profile_taotao.nickname = '1st nickname'
         profile_taotao.save()
-        url = USER_PROFILE_DETAIL_URL.format(profile_taotao.id)
+        url = USER_PROFILE_DETAIL_URL.format(taotao.id)
 
-        # 0. use wrong profile_id
-        url_wrong = USER_PROFILE_DETAIL_URL.format(profile_taotao.id + 1)
-        response = taotao_client.put(path=url_wrong, data={'nickname': 'new nickname'})
+        # 0. use wrong user_id
+        url_wrong = USER_PROFILE_DETAIL_URL.format(taotao.id + 9999)
+        response = taotao_client.put(path=url_wrong, data={'nickname': '2nd nickname'})
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         profile_taotao.refresh_from_db()
-        self.assertEqual(profile_taotao.nickname, 'old nickname')
+        self.assertEqual(profile_taotao.nickname, '1st nickname')
 
         # 0. anonymous user can not update profile
-        response = self.anonymous_client.put(path=url, data={'nickname': 'new nickname'})
+        response = self.anonymous_client.put(path=url, data={'nickname': '2nd nickname'})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         # print(response.data)
         # {'detail': ErrorDetail(string='Authentication ...', code='not_authenticated')}
         self.assertEqual(response.data['detail'], 'Authentication credentials were not provided.')
         profile_taotao.refresh_from_db()
-        self.assertEqual(profile_taotao.nickname, 'old nickname')
+        self.assertEqual(profile_taotao.nickname, '1st nickname')
 
         # 1. profile can only be updated by owner
-        response = zhuzhu_client.put(path=url, data={'nickname': 'new nickname'})
+        response = zhuzhu_client.put(path=url, data={'nickname': '2nd nickname'})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         # {'detail': ErrorDetail(string='You do not ...', code='permission_denied')}
         self.assertEqual(response.data['detail'], 'You do not have permission to access this object.')
         profile_taotao.refresh_from_db()
-        self.assertEqual(profile_taotao.nickname, 'old nickname')
+        self.assertEqual(profile_taotao.nickname, '1st nickname')
 
         # 2. update nickname
-        response = taotao_client.put(path=url, data={'nickname': 'new nickname'})
+        response = taotao_client.put(path=url, data={'nickname': '2nd nickname'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         profile_taotao.refresh_from_db()
-        self.assertEqual(profile_taotao.nickname, 'new nickname')
+        self.assertEqual(profile_taotao.nickname, '2nd nickname')
 
-        # 3. update avatar
+        # 3. update avatar (will not update nickname)
         data = {'avatar': SimpleUploadedFile(
             name='my-avatar.jpg',
             content=str.encode('a fake image'), # bytes 字节类型
@@ -176,5 +176,18 @@ class UserProfileAPITests(TestCase):
         # Django 在保存 FileField 时, 如果文件名已存在，会自动重命名以避免覆盖
         # 例如: my-avatar.jpg, my-avatar_3v4R8U4.jpg
         self.assertEqual('my-avatar' in response.data['avatar'], True)
+        self.assertEqual(response.data['nickname'], '2nd nickname')
+        avatar_url = response.data['avatar']
         profile_taotao.refresh_from_db()
-        self.assertIsNotNone(profile_taotao.avatar)
+        # '/media/my-avatar_MNMdPf4.jpg' in 'http://testserver/media/my-avatar_MNMdPf4.jpg'
+        self.assertEqual(profile_taotao.avatar.url in avatar_url, True)
+        self.assertEqual(profile_taotao.nickname, '2nd nickname')
+
+        # 4. update nickname will not update avatar
+        response = taotao_client.put(path=url, data={'nickname': '3rd nickname'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['avatar'], avatar_url)
+        self.assertEqual(response.data['nickname'], '3rd nickname')
+        profile_taotao.refresh_from_db()
+        self.assertEqual(profile_taotao.avatar.url in avatar_url, True)
+        self.assertEqual(profile_taotao.nickname, '3rd nickname')

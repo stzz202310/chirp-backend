@@ -102,22 +102,13 @@ docker compose logs -f celery        # Celery 实时日志
 docker compose logs --tail=50 chirp  # Django 最近 50 行日志
 ```
 
-### 重启单个服务
-
-```bash
-docker compose restart celery   # 修改了 Celery task 代码后需执行
-docker compose restart chirp    # 重启 Django（通常不需要，runserver 自动热重载）
-```
-
 ### 进入数据库
 
 ```bash
-# MySQL 交互式 shell
-docker exec -it chirp_mysql mysql -uroot -pzhuzhu twitter
-
-# Django shell
-make shell
-python manage.py shell
+docker exec -it chirp_mysql mysql -uroot -pzhuzhu twitter   # MySQL 交互式 shell
+docker exec -it chirp_redis redis-cli -n 1                  # Redis 交互式 shell
+nc localhost 11211                                          # Memcached 交互式 shell
+make shell, python manage.py shell                          # Django shell
 ```
 
 ### 数据持久化说明

@@ -13,6 +13,7 @@ from tweets.api.serializers import (
 from tweets.models import Tweet
 from tweets.services import TweetService
 from utils.decorators import required_params
+from utils.memcached_helper import MemcachedHelper
 from utils.paginations import EndlessPagination
 
 
@@ -54,11 +55,19 @@ class TweetViewSet(viewsets.GenericViewSet):
 
     @method_decorator(ratelimit(key='user_or_ip', rate='5/s', method='GET', block=True))
     def retrieve(self, request, *args, **kwargs):
-        tweet = self.get_object()
-        # tweet = MemcachedHelper.get_object_through_cache(
-        #     model_class=Tweet,
-        #     object_id=int(kwargs.get('pk')),
-        # )
+        # 点查走 Memcached: cache hit 直接返回; cache miss 回源 DB 并写回缓存; DB 没有 → 404
+        # ⚠️ get_object_through_cache 在 DB 也查不到时会抛 Tweet.DoesNotExist (而非 404),
+        #    需手动转成 404 (原来的 self.get_object() 是 get_object_or_404, 自带 404 语义)
+        try:
+            tweet = MemcachedHelper.get_object_through_cache(
+                model_class=Tweet,
+                object_id=kwargs['pk'],
+            )
+        except Tweet.DoesNotExist:
+            return Response(
+                data={'message': 'Tweet not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         serializer = TweetSerializerForDetail(
             instance=tweet,
             context={'request': request},
