@@ -76,3 +76,4 @@ wcwidth==0.2.14
 wrapt==1.17.3
 zipp==1.0.0
 zope.interface==5.4.0
+gunicorn==21.2.0

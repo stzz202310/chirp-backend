@@ -1,0 +1,84 @@
+services:
+  mysql:
+    container_name: chirp_mysql
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password --mysqlx=0
+    environment:
+      MYSQL_ROOT_PASSWORD: zhuzhu
+      MYSQL_DATABASE: twitter
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./compose/mysql/conf/my.cnf:/etc/mysql/my.cnf
+      - ./compose/mysql/init:/docker-entrypoint-initdb.d/
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pzhuzhu"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: always
+
+  redis:
+    container_name: chirp_redis
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./compose/redis/conf/redis.conf:/etc/redis/redis.conf
+    command: redis-server /etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: always
+
+  memcached:
+    container_name: chirp_memcached
+    image: memcached:1.6
+    ports:
+      - "11211:11211"
+    command: ["-m", "64"]
+    restart: always
+
+  chirp:
+    container_name: chirp_web
+    build: .
+    image: chirp/back-end:latest
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      memcached:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    volumes:
+      - staticfiles:/app/staticfiles
+    environment:
+      - DJANGO_SETTINGS_MODULE=twitter.settings
+    command:
+      - /bin/bash
+      - -c
+      - |
+        python manage.py migrate
+        python manage.py collectstatic --noinput
+        gunicorn -c gunicorn.conf.py twitter.wsgi:application
+    restart: always
+
+  celery:
+    container_name: chirp_celery
+    image: chirp/back-end:latest
+    depends_on:
+      - chirp
+      - redis
+    command: celery -A twitter worker -l info -Q default,newsfeeds
+    restart: always
+
+volumes:
+  mysql_data:
+  redis_data:
+  staticfiles:
