@@ -1,27 +1,28 @@
 IMAGE = chirp/back-end:latest
+COMPOSE = docker compose -f docker-compose.prod.yml
 
 .PHONY: build up down stop logs shell migrate test
 
 build:
-	docker build -t $(IMAGE) .
+	$(COMPOSE) build
 
 up:
-	docker compose up -d
+	$(COMPOSE) up -d
 
 down:
-	docker compose down
+	$(COMPOSE) down
 
 stop:
-	docker compose stop
+	$(COMPOSE) stop
 
 logs:
-	docker compose logs --tail=100 -f
+	$(COMPOSE) logs --tail=100 -f
 
 shell:
-	docker compose exec chirp /bin/bash
+	docker exec -it chirp_web /bin/bash
 
 migrate:
-	docker compose exec chirp python manage.py migrate
+	docker exec chirp_web python manage.py migrate
 
 test:
-	docker compose exec chirp python manage.py test
+	docker exec chirp_web python manage.py test
