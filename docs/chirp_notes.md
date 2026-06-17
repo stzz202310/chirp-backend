@@ -254,25 +254,7 @@ failed to load a stylesheet from a URL
 
 ---
 
-## 五、EC2 实例配置
-
-### 安全组规则
-
-| 端口 | 来源 | 用途 |
-|------|------|------|
-| 22 (SSH) | My IP only | SSH 连服务器，不对公网开放 |
-| 80 (HTTP) | Anywhere | 对外提供网站访问 |
-
-### 两个 IP 的区别
-
-- 公网 IP：互联网任何人可以访问，浏览器里用这个
-- 内网 IP：AWS VPC 内部地址，外网访问不到
-
-两个都加进 `ALLOWED_HOSTS` 是保险做法。
-
----
-
-## 六、TODO（下一步）
+## 五、TODO（下一步）
 
 - [ ] GitHub Actions CI/CD：push → 自动部署到 EC2
 - [ ] README：架构图、技术栈说明、live URL

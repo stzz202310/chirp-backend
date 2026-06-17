@@ -7,8 +7,9 @@ import os
 DEBUG = False  # 必须关闭，否则报错时会暴露代码细节
 
 ALLOWED_HOSTS = [
-    '13.52.251.244',   # EC2 公网 IP
-    '172.31.7.179',   # EC2 内网 IP
+    'chirp-app.dev',        # 域名
+    'www.chirp-app.dev',    # www 域名
+    '172.31.7.179',         # EC2 内网 IP: AWS VPC 内部地址，外网访问不到
     'localhost',
     '127.0.0.1',
 ]
@@ -68,7 +69,10 @@ STATIC_ROOT = '/app/staticfiles'
 STATIC_URL = '/django-static/'  # 避免和前端 /static/ 冲突
 
 # 告诉 Django 信任来自这个 IP 的 CSRF
-CSRF_TRUSTED_ORIGINS = ['http://13.52.251.244']
+CSRF_TRUSTED_ORIGINS = [
+    'https://chirp-app.dev',
+    'https://www.chirp-app.dev',
+]
 
 # urls: + static(XXX) 在生产环境下实际上是空操作—; DEBUG=False 时 Django 本身就不会处理这个路由
 # 开发环境：文件存本地 → Django 的 /media/ 路由提供访问
