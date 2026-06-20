@@ -8,6 +8,7 @@ media/
 installers/
 hbase-2.4.4/
 thrift-0.14.2/
+staticfiles/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
