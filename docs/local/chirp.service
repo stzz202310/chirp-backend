@@ -1,0 +1,21 @@
+# sudo cat /etc/systemd/system/chirp.service
+# sudo systemctl daemon-reload
+# sudo systemctl enable chirp
+# sudo systemctl status chirp
+
+[Unit]
+Description=Chirp Docker Compose
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/ubuntu/chirp/backend/chirp-backend
+ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
+ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
+

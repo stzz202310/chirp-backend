@@ -223,5 +223,7 @@ CELERY_TASK_ROUTES = {
 
 try:
     from twitter.local_settings import *
-except:
+except ImportError:
+    # 仅当 local_settings.py 不存在时静默跳过;
+    # 文件存在但内部有语法/拼写错误会照常抛出
     pass
