@@ -4,7 +4,7 @@ A production-deployed, Twitter-style backend built with Django — service decou
 
 **Live app:** https://chirp-app.dev/  
 **Live API:** https://chirp-app.dev/api/users/1/ — see [API Overview](#api-overview) for all endpoints  
-**Frontend repo:** [chirp-frontend](../chirp-frontend)
+**Frontend repo:** [chirp-frontend](https://github.com/stzz202310/chirp-frontend)
 
 **Demo accounts** (log in to explore — browse the newsfeed, post a tweet, like and comment, follow / unfollow each other, edit your profile):
 
@@ -56,17 +56,17 @@ All services run as Docker containers on a single EC2 instance, fronted by Nginx
 
 ## Tech Stack
 
-| Layer | Technology | Why |
-|---|---|---|
-| Framework | Django + Django REST Framework | Mature ORM, fast to iterate on a relational data model |
-| Async tasks | Celery + Redis (broker) | Decouples newsfeed fanout from the request/response cycle |
-| Caching | Memcached + Redis | Memcached for single objects; Redis for lists, counters, task queue |
-| Database | MySQL | Relational integrity for users, tweets, and social graph |
-| Wide-column store | HBase — custom Django-style ORM | High-write, simple-schema tables (newsfeed / friendship); see below |
-| Storage | AWS S3 via IAM Role | No long-lived credentials on the server; photos never touch local disk |
-| Web server | Gunicorn (WSGI) behind Nginx | Gunicorn handles app logic; Nginx handles TLS, static files, and buffering slow clients |
-| Deployment | Docker Compose on EC2, systemd-managed | Five services orchestrated as one stack, auto-restarts on reboot |
-| CI/CD | GitHub Actions → SSH → rebuild + restart | Push to `main` deploys automatically, no manual server access required |
+| Layer | Technology |
+|---|---|
+| Framework | Django + Django REST Framework |
+| Async tasks | Celery + Redis (broker) |
+| Caching | Memcached + Redis |
+| Database | MySQL |
+| Wide-column store | HBase + custom Django-style ORM |
+| Storage | AWS S3 (IAM Role) |
+| Web server | Gunicorn behind Nginx |
+| Deployment | Docker Compose on EC2 |
+| CI/CD | GitHub Actions |
 
 ---
 
@@ -74,7 +74,7 @@ All services run as Docker containers on a single EC2 instance, fronted by Nginx
 
 **1. Newsfeed fanout via Celery, not synchronous writes.** When a user posts a tweet, fanning the tweet out to every follower's timeline at write time would block the request on however many followers that user has. Instead, the tweet write returns immediately and a Celery task (`fanout_newsfeeds_main_task` → batched `fanout_newsfeeds_batch_task`) pushes the tweet into followers' newsfeeds asynchronously, queued through Redis.
 
-**2. Two-tier caching, not one.** Memcached serves frequently-read, rarely-changing single objects (user profiles, individual tweets) with a flat TTL. Redis is used where structure matters — the newsfeed and per-user tweet lists (`RedisHelper` keeps them as length-capped, time-ordered Redis lists), likes/comments counters, rate-limit counters, and the Celery broker — because it supports atomic increments and list/queue operations that Memcached doesn't.
+**2. Two-tier caching.** Memcached handles single-object reads (user profiles, tweets) and rate-limit counters — flat TTL, no structure needed, fast. Redis is used where structure matters — the newsfeed and per-user tweet lists (`RedisHelper` keeps them as length-capped, time-ordered Redis lists), likes/comments counters, and the Celery broker — because it supports atomic increments and list/queue operations that Memcached doesn't.
 
 **3. Same-origin deployment over CORS.** Frontend and backend are served from the same Nginx instance under `chirp-app.dev`, avoiding cross-origin cookie and CSRF complications entirely. This was a deliberate trade-off: the existing frontend used a dev-server proxy (not `django-cors-headers`), so same-origin was the path of least friction, and it produces a tighter, more defensible Nginx configuration to discuss.
 
