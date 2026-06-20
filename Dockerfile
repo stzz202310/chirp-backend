@@ -29,6 +29,7 @@ RUN pip install --upgrade pip 'setuptools<80' && \
 
 # 再拷贝项目其余代码
 COPY . .
+RUN ln -sf local_settings_prod.py twitter/local_settings.py
 
 # 声明 Django 端口（仅作文档说明，真正的端口映射在 docker-compose 里做）
 EXPOSE 8000

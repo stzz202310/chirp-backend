@@ -45,5 +45,6 @@ Makefile
 docs/
 *.md
 
-# 敏感配置
-local_settings*.py
+# 开发环境专用配置，生产镜像不需要
+local_settings_docker.py
+local_settings_vagrant.py

@@ -76,6 +76,7 @@ class TweetViewSet(viewsets.GenericViewSet):
 
     @method_decorator(ratelimit(key='user', rate='1/s', method='POST', block=True))
     @method_decorator(ratelimit(key='user', rate='5/m', method='POST', block=True))
+    @method_decorator(ratelimit(key='user', rate='10/d', method='POST', block=True))  # 每用户每天上限, 防滥用刷量/刷图
     def create(self, request):
         serializer = TweetSerializerForCreate(
             data=request.data,
