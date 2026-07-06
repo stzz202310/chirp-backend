@@ -4,6 +4,7 @@ from django.db import models
 from django.db.models.signals import post_save, pre_delete
 
 from likes.models import Like
+from tweets.constants import TweetModerationStatus, TWEET_MODERATION_STATUS_CHOICES
 from tweets.listeners import push_tweet_to_cache
 from utils.listeners import invalidate_object_cache
 from utils.memcached_helper import MemcachedHelper
@@ -23,6 +24,12 @@ class Tweet(models.Model):
 
     likes_count = models.IntegerField(default=0, null=True)
     comments_count = models.IntegerField(default=0, null=True)
+
+    # 发帖时先 PENDING, Celery 异步调用 LLM 审核后回填 SAFE/FLAGGED
+    moderation_status = models.IntegerField(
+        default=TweetModerationStatus.PENDING,
+        choices=TWEET_MODERATION_STATUS_CHOICES,
+    )
 
     class Meta:
         index_together = (('user', 'created_at'),)

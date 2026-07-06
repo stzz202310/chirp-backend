@@ -1,27 +1,29 @@
 
-01. accounts.api.serializers    TODO [Homework] 增加验证 username 是不是只由给定的字符集合构成
-02. docs.databases.ratelimit    TODO [Homework] 自己实现令牌法, django-ratelimit 优化
+01. accounts.api.serializers    TODO [] 增加验证 username 是不是只由给定的字符集合构成
+02. docs.databases.ratelimit    TODO [] 自己实现令牌法, django-ratelimit 优化
 03. twitter.urls                TODO [Complete] ❌ 不推荐：/api/profiles/{profile_id}/
-04. docs.db.optimization        TODO [Homework] DROP FOREIGN KEY CONSTRAINT
-05. comments.api.views          TODO [Homework] 有权限看这个tweet的用户, 才有权限看这个tweet的评论
-06. likes.listeners             TODO [Homework] 增加 Comment.likes_count, 类似 Tweet.likes_count
-07. likes.services              TODO [Homework] 优化 [comments x 10].has_liked
-08. likes.api.serializers       TODO [Homework] 前端发送 {点赞 + 取消赞}, 后端先收到 {取消赞} 后收到 {点赞}
-09. inbox.api.serializers       TODO [Homework] 将 content_type/object_id 转换为具体对象信息
-10. tweets.models.tweet         TODO [Myself]   Tweet & Newsfeed Redis 缓存设计
-11. django_hbase.models.fields  TODO [Homework] 增加 is_required/default 属性, 默认值为 true/None,
+04. docs.db.optimization        TODO [] DROP FOREIGN KEY CONSTRAINT
+05. comments.api.views          TODO [] 有权限看这个tweet的用户, 才有权限看这个tweet的评论
+06. likes.listeners             TODO [] 增加 Comment.likes_count, 类似 Tweet.likes_count
+07. likes.services              TODO [] 优化 [comments x 10].has_liked
+08. likes.api.serializers       TODO [] 前端发送 {点赞 + 取消赞}, 后端先收到 {取消赞} 后收到 {点赞}
+09. inbox.api.serializers       TODO [] 将 content_type/object_id 转换为具体对象信息
+10. tweets.models.tweet         TODO []   Tweet & Newsfeed Redis 缓存设计
+11. django_hbase.models.fields  TODO [] 增加 is_required/default 属性, 默认值为 true/None,
                                                 并在 hbase_models 中做相应的处理, 抛出相应的异常信息
-12. .models.hbase_models        TODO [Homework] 实现一个 get_or_create 的方法, 返回 (instance, created)
-13. friendships.services        TODO [Homework] cache in redis set instead of memcached
-14. utils.paginations           TODO [Homework] snowflake instead of created_at
-15. utils.paginations           TODO [Homework] 优化"下拉刷新"
-16. tweets.api.serializers      TODO [Myself]   cache.get_many(keys), 然后再处理 cache miss
-17. tweets.api.views            TODO [Homework] 通过 query 参数 with_all_comments, 控制是否返回全部评论
+12. .models.hbase_models        TODO [] 实现一个 get_or_create 的方法, 返回 (instance, created)
+13. friendships.services        TODO [] cache in redis set instead of memcached
+14. utils.paginations           TODO [] snowflake instead of created_at
+15. utils.paginations           TODO [] 优化"下拉刷新"
+16. tweets.api.serializers      TODO []   cache.get_many(keys), 然后再处理 cache miss
+17. tweets.api.views            TODO [] 通过 query 参数 with_all_comments, 控制是否返回全部评论
                                                 通过 query 参数 with_preview_comments, 控制是否返回前三条评论
-18. newsfeeds.api.views         TODO [Homework] 新内容提示 "你有 N 条新内容", 这个功能是怎么实现的?
+18. newsfeeds.api.views         TODO [] 新内容提示 "你有 N 条新内容", 这个功能是怎么实现的?
 19. newsfeeds.models.newsfeed   TODO [Complete] created_at 应等于 tweet.created_at，而非 auto_now_add=True
-20. tweets.api.serializers      TODO [Myself]   缓存 tweet_photo: 消除 get_photo_urls 的 N+1
-21. tweets.api.views.retrieve   TODO [Myself]   缓存穿透: 不存在的 tweet_id 反复请求每次都打 DB
+20. tweets.api.serializers      TODO []   缓存 tweet_photo: 消除 get_photo_urls 的 N+1
+21. tweets.api.views.retrieve   TODO []   缓存穿透: 不存在的 tweet_id 反复请求每次都打 DB
+22. tweets.tasks.moderate_tweet TODO []   LLM 审核结果目前只落 DB, 缓存/展示层完全不知情
+
 
 ============================================================
 3. UserProfile API 设计说明
@@ -224,3 +226,32 @@ Polling (轮询): 前端定时主动发请求询问后端 "有没有新数据"
 
 ⚠️ A 的空值需可与真实对象区分 (现在 get_object_through_cache 的 `if obj:` 把 None 当 miss,
    需引入一个明确的 EMPTY 哨兵值, 否则空标记会被当成 cache miss)
+
+
+============================================================
+22. LLM 内容审核: 缓存失效 + fanout 时序漏洞 + 读时过滤
+============================================================
+现状: moderate_tweet (Celery task) 调 Claude API 判完 SAFE/FLAGGED 后只 .update() DB,
+     缓存和展示层完全不知情, moderation_status 形同虚设 (先简化实现, 只跑通 LLM API 调用本身)
+
+遗留问题 (按依赖顺序):
+
+1) 两层缓存不会自动感知 moderation_status 的变化
+   - Memcached (tweet:{tweet_id} 单点缓存): .update() 走 QuerySet, 不触发 post_save 信号,
+     缓存里的 moderation_status 停留在发帖那一刻 (PENDING), 需要手动 invalidate_cached_object
+   - Redis (user_tweets:{user_id} 列表缓存): 缓存的是发帖时序列化的完整 Tweet 快照,
+     PENDING 状态被永久固化进去, 光 invalidate Memcached 不够, 得把这个 key 也删掉触发重建
+   - newsfeed 路径反而天然没事: NewsFeed 在 Redis 里只存 (user_id, tweet_id, created_at),
+     真正内容通过 cached_tweet -> Memcached 单点缓存现读, 只要 1) 修好, 这条路径就跟着对
+
+2) fanout 已经跑在审核完成之前, 无法靠调整顺序解决
+   views.py 里 fanout_to_followers() 和 moderate_tweet.delay() 前后脚派发,
+   但 fanout 只写 DB (几十毫秒), moderate_tweet 要等外部 API 网络往返 (几百毫秒到几秒)
+   等判定 FLAGGED 时, 这条推文早已出现在所有粉丝的 NewsFeed 表里
+   => 结论: 不能指望"审核完成前不让扩散", 只要审核是异步的, 这个竞态窗口就消不掉
+
+3) 因此正确的修法是读时过滤, 不是重新设计 fanout
+   在 TweetViewSet.list/retrieve、NewsFeedViewSet.list 序列化前排除 moderation_status == FLAGGED
+   的推文 (1) 修好后, 排除判断不需要额外查询, 直接读 cached_tweet.moderation_status 即可)
+   这与真实系统 (Twitter 等) 的做法一致: 先发布, 异步审核跟上, 一旦违规就在读路径下架,
+   而不是试图撤销已经派发出去的 fanout 记录
