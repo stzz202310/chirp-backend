@@ -60,6 +60,7 @@ services:
       - ./staticfiles:/app/staticfiles
     environment:
       - DJANGO_SETTINGS_MODULE=twitter.settings
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     command:
       - /bin/bash
       - -c
@@ -78,7 +79,9 @@ services:
     depends_on:
       - chirp
       - redis
-    command: celery -A twitter worker -l info -Q default,newsfeeds
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    command: celery -A twitter worker -l info -Q default,newsfeeds,llm_tasks
     restart: always
 
 volumes:

@@ -61,8 +61,9 @@ All services run as Docker containers on a single EC2 instance, fronted by Nginx
 | Framework | Django + Django REST Framework |
 | Async tasks | Celery + Redis (broker) |
 | Caching | Memcached + Redis |
-| Database | MySQL |
+| Database | MySQL / PostgreSQL |
 | Wide-column store | HBase — custom Django-style ORM |
+| Content moderation | Anthropic Claude (Haiku 4.5) |
 | Storage | AWS S3 (IAM Role) |
 | Web server | Gunicorn behind Nginx |
 | Deployment | Docker Compose on EC2 |
@@ -79,6 +80,8 @@ All services run as Docker containers on a single EC2 instance, fronted by Nginx
 **3. Same-origin deployment over CORS.** Frontend and backend are served from the same Nginx instance under `chirp-app.dev`, avoiding cross-origin cookie and CSRF complications entirely. This was a deliberate trade-off: the existing frontend used a dev-server proxy (not `django-cors-headers`), so same-origin was the path of least friction, and it produces a tighter, more defensible Nginx configuration to discuss.
 
 **4. Rate limiting and abuse guards.** Read endpoints are throttled per user-or-IP and writes carry per-second / per-minute / per-day caps (`django-ratelimit`). Since the live demo is open to anyone, tweet uploads are size-capped at the Nginx layer and an S3 lifecycle rule auto-expires demo media.
+
+**5. Async LLM content moderation via a dedicated Celery queue.** After a tweet is created, `moderate_tweet.delay(...)` classifies its content as SAFE/FLAGGED with Claude Haiku 4.5, without blocking the post response. It's routed to its own `llm_tasks` queue — separate from `default`/`newsfeeds` — so a slow or rate-limited LLM call never backs up newsfeed fanout. The feature is fully opt-in: with no `ANTHROPIC_API_KEY` configured, the task silently no-ops.
 
 ---
 
@@ -114,11 +117,11 @@ A [`GateKeeper`](gatekeeper/) percentage flag flips the backend gradually (0% My
 This project supports two local environments, switched via `local_settings.py`:
 
 ```bash
-# Vagrant (full stack including HBase)
+# Vagrant (full stack including HBase, MySQL)
 vagrant up && vagrant ssh
 python manage.py runserver 0.0.0.0:8000
 
-# Docker (matches production topology)
+# Docker (PostgreSQL locally; matches production topology otherwise)
 make build
 make up
 

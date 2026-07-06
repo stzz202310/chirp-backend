@@ -12,6 +12,7 @@ from tweets.api.serializers import (
 )
 from tweets.models import Tweet
 from tweets.services import TweetService
+from tweets.tasks import moderate_tweet
 from utils.decorators import required_params
 from utils.memcached_helper import MemcachedHelper
 from utils.paginations import EndlessPagination
@@ -91,6 +92,7 @@ class TweetViewSet(viewsets.GenericViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
         tweet = serializer.save()
         NewsFeedService.fanout_to_followers(tweet=tweet)
+        moderate_tweet.delay(tweet_id=tweet.id, content=tweet.content)
         return Response(
             data=TweetSerializer(instance=tweet, context={"request": request}).data,
             status=status.HTTP_201_CREATED,

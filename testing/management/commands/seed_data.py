@@ -2,6 +2,7 @@
 #   1. 清空所有表（含 superuser）+ Redis:
 #        docker exec -it chirp_web python manage.py flush
 #        docker exec -it chirp_redis redis-cli flushall
+#        docker restart chirp_memcached
 #
 #   2. 如需保留 admin 账号，重新创建 superuser:
 #        docker exec -it chirp_web python manage.py createsuperuser

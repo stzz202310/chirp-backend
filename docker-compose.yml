@@ -60,6 +60,8 @@ services:
       - "8000:8000"
     volumes:
       - .:/app                      # 挂载代码：本地改代码容器内即时生效（runserver 自动重载）
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}  # 本地想测真实审核, export 后 up 即可; 不设也不影响发帖
     command:
       - /bin/bash
       - -c
@@ -76,7 +78,9 @@ services:
       - redis
     volumes:
       - .:/app
-    command: celery -A twitter worker -l info -Q default,newsfeeds
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    command: celery -A twitter worker -l info -Q default,newsfeeds,llm_tasks
     restart: always
 
 volumes:

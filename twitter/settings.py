@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
+import os
 import sys
 from pathlib import Path
 
@@ -214,11 +215,18 @@ CELERY_TASK_EAGER_PROPAGATES = TESTING
 CELERY_TASK_QUEUES = (
     Queue(name='default', routing_key='default'),
     Queue(name='newsfeeds', routing_key='newsfeeds'),
+    Queue(name='llm_tasks', routing_key='llm_tasks'),
 )
 CELERY_TASK_ROUTES = {
     'newsfeeds.tasks.fanout_newsfeeds_main_task': {'queue': 'default'},
     'newsfeeds.tasks.fanout_newsfeeds_batch_task': {'queue': 'newsfeeds'},
+    'tweets.tasks.moderate_tweet': {'queue': 'llm_tasks'},
 }
+
+# LLM 内容审核: 测试环境不调用真实 API (会产生费用/需要网络);
+# 未配置 API key 时也静默跳过, 不影响发帖主流程
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+LLM_MODERATION_ENABLED = bool(ANTHROPIC_API_KEY) and not TESTING
 
 
 try:
