@@ -1,21 +1,23 @@
-# 一条命令启动整套后端：PostgreSQL + Redis + Memcached + Django + Celery worker
-# 暂不含 HBase（开关默认关，走 PostgreSQL），后续需要时再补。
-# 生产仍用 MySQL（见 docker-compose.prod.yml）；这里仅本地开发换成 PostgreSQL。
+# 一条命令启动整套后端：MySQL + Redis + Memcached + Django + Celery worker
+# 暂不含 HBase（开关默认关，走 MySQL），后续需要时再补。
 
 services:
-  postgres:
-    container_name: chirp_postgres
-    image: postgres:16
+  mysql:
+    container_name: chirp_mysql
+    image: mysql:8.0
+    platform: linux/amd64           # Apple 芯片必须：强制走 amd64（Rosetta）
+    command: --default-authentication-plugin=mysql_native_password --mysqlx=0
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: zhuzhu     # 须与 local_settings.py 里的 PASSWORD 一致
-      POSTGRES_DB: twitter          # 自动创建名为 twitter 的库
+      MYSQL_ROOT_PASSWORD: zhuzhu   # 须与 local_settings.py 里的 PASSWORD 一致
+      MYSQL_DATABASE: twitter       # 自动创建名为 twitter 的库
     ports:
-      - "5432:5432"                 # 宿主机:容器，方便你用本地客户端连
+      - "3306:3306"                 # 宿主机:容器，方便你用本地客户端连
     volumes:
-      - postgres_data:/var/lib/postgresql/data  # 数据持久化（命名卷）
-    healthcheck:  # 让别的服务能判断 postgres 是否"真的准备好"
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      - mysql_data:/var/lib/mysql                         # 数据持久化（命名卷）
+      - ./compose/mysql/conf/my.cnf:/etc/mysql/my.cnf     # 挂配置
+      - ./compose/mysql/init:/docker-entrypoint-initdb.d/ # 挂初始化 SQL
+    healthcheck:  # 让别的服务能判断 mysql 是否"真的准备好"
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pzhuzhu"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -50,8 +52,8 @@ services:
     build: .                        # 用当前目录的 Dockerfile 构建
     image: chirp/back-end:latest
     depends_on:
-      postgres:
-        condition: service_healthy  # 等 postgres healthcheck 通过才启动
+      mysql:
+        condition: service_healthy  # 等 mysql healthcheck 通过才启动
       redis:
         condition: service_healthy
       memcached:
@@ -80,5 +82,5 @@ services:
     restart: always
 
 volumes:
-  postgres_data:
+  mysql_data:
   redis_data:
